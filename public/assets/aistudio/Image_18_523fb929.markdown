@@ -1,0 +1,233 @@
+---
+name: Gastô Fintech
+colors:
+  surface: '#faf8ff'
+  surface-dim: '#d2d9f4'
+  surface-bright: '#faf8ff'
+  surface-container-lowest: '#ffffff'
+  surface-container-low: '#f2f3ff'
+  surface-container: '#eaedff'
+  surface-container-high: '#e2e7ff'
+  surface-container-highest: '#dae2fd'
+  on-surface: '#131b2e'
+  on-surface-variant: '#474555'
+  inverse-surface: '#283044'
+  inverse-on-surface: '#eef0ff'
+  outline: '#787586'
+  outline-variant: '#c8c4d7'
+  surface-tint: '#5544dc'
+  primary: '#5442db'
+  on-primary: '#ffffff'
+  primary-container: '#6d5ef5'
+  on-primary-container: '#fffdff'
+  inverse-primary: '#c5c0ff'
+  secondary: '#0051d5'
+  on-secondary: '#ffffff'
+  secondary-container: '#316bf3'
+  on-secondary-container: '#fefcff'
+  tertiary: '#722ce3'
+  on-tertiary: '#ffffff'
+  tertiary-container: '#8b4dfd'
+  on-tertiary-container: '#fffdff'
+  error: '#ba1a1a'
+  on-error: '#ffffff'
+  error-container: '#ffdad6'
+  on-error-container: '#93000a'
+  primary-fixed: '#e4dfff'
+  primary-fixed-dim: '#c5c0ff'
+  on-primary-fixed: '#150067'
+  on-primary-fixed-variant: '#3c24c5'
+  secondary-fixed: '#dbe1ff'
+  secondary-fixed-dim: '#b4c5ff'
+  on-secondary-fixed: '#00174b'
+  on-secondary-fixed-variant: '#003ea8'
+  tertiary-fixed: '#eaddff'
+  tertiary-fixed-dim: '#d2bbff'
+  on-tertiary-fixed: '#25005a'
+  on-tertiary-fixed-variant: '#5a00c6'
+  background: '#faf8ff'
+  on-background: '#131b2e'
+  surface-variant: '#dae2fd'
+typography:
+  display:
+    fontFamily: Plus Jakarta Sans
+    fontSize: 40px
+    fontWeight: '800'
+    lineHeight: 48px
+    letterSpacing: -0.03em
+  display-mobile:
+    fontFamily: Plus Jakarta Sans
+    fontSize: 32px
+    fontWeight: '800'
+    lineHeight: 40px
+    letterSpacing: -0.025em
+  headline-lg:
+    fontFamily: Plus Jakarta Sans
+    fontSize: 28px
+    fontWeight: '700'
+    lineHeight: 36px
+    letterSpacing: -0.02em
+  headline-md:
+    fontFamily: Plus Jakarta Sans
+    fontSize: 22px
+    fontWeight: '700'
+    lineHeight: 28px
+    letterSpacing: -0.015em
+  headline-sm:
+    fontFamily: Plus Jakarta Sans
+    fontSize: 18px
+    fontWeight: '600'
+    lineHeight: 24px
+    letterSpacing: -0.01em
+  body-lg:
+    fontFamily: Plus Jakarta Sans
+    fontSize: 16px
+    fontWeight: '400'
+    lineHeight: 24px
+    letterSpacing: -0.005em
+  body-md:
+    fontFamily: Plus Jakarta Sans
+    fontSize: 14px
+    fontWeight: '400'
+    lineHeight: 20px
+    letterSpacing: 0em
+  body-sm:
+    fontFamily: Plus Jakarta Sans
+    fontSize: 12px
+    fontWeight: '400'
+    lineHeight: 16px
+    letterSpacing: 0.01em
+  label-lg:
+    fontFamily: Plus Jakarta Sans
+    fontSize: 14px
+    fontWeight: '600'
+    lineHeight: 20px
+    letterSpacing: 0em
+  label-md:
+    fontFamily: Plus Jakarta Sans
+    fontSize: 12px
+    fontWeight: '600'
+    lineHeight: 16px
+    letterSpacing: 0.01em
+  label-sm:
+    fontFamily: Plus Jakarta Sans
+    fontSize: 11px
+    fontWeight: '600'
+    lineHeight: 14px
+    letterSpacing: 0.02em
+  numeric-stat:
+    fontFamily: Plus Jakarta Sans
+    fontSize: 24px
+    fontWeight: '700'
+    lineHeight: 30px
+    letterSpacing: -0.02em
+rounded:
+  sm: 0.25rem
+  DEFAULT: 0.5rem
+  md: 0.75rem
+  lg: 1rem
+  xl: 1.5rem
+  full: 9999px
+spacing:
+  gutter: 1rem
+  gutter-desktop: 1.5rem
+  margin: 1rem
+  margin-tablet: 1.5rem
+  margin-desktop: 2.5rem
+  space-xs: 0.25rem
+  space-sm: 0.5rem
+  space-md: 1rem
+  space-lg: 1.5rem
+  space-xl: 2rem
+---
+
+## Brand & Style
+
+This design system establishes an intelligent, effortless, and hyper-refined personal finance management experience. Inspired by the precise execution of Linear and the approachable confidence of modern digital banking, the aesthetic balances pure utility with vibrant financial vitality.
+
+The emotional signature is one of unencumbered clarity, structural discipline, and absolute control. The interface avoids frivolous ornamentation in favor of crisp delineation, meticulous spacing, and high-contrast typographic readability. Every interaction feels instant, tactile, and dependable—empowering users to comprehend and direct their financial lives without cognitive drag.
+
+## Colors
+
+The palette is engineered for high-legibility financial workflows in strict light mode:
+
+- **Canvas & Background:** Base workspace uses `#F8FAFC`, stepping to pure `#FFFFFF` for primary cards and elevated interactive elements.
+- **Surface Container:** Muted containers, secondary panels, and utility tracks utilize `#F1F5F9`.
+- **Primary Accent:** `#6D5EF5` (Electric Indigo/Violet) serves as the primary driver for key CTAs, focus indicators, active states, and balance trends.
+- **Borders & Dividers:** Subtle structural outlines must be rendered with `#E2E8F0`.
+- **Text & Hierarchy:** 
+  - Primary text: `#0F172A` (Slate 900) for headers, values, and strong contrast readouts.
+  - Secondary text: `#475569` (Slate 600) for metadata, labels, and helper descriptions.
+  - Subtle text: `#94A3B8` (Slate 400) for placeholders and inactive captions.
+
+### Category Color Tokens
+Category classification uses strict, deterministic color-coding to build muscle memory across transaction logs and analytical charts:
+- **Alimentação:** `#EA580C`
+- **Transporte:** `#2563EB`
+- **Educação:** `#7C3AED`
+- **Lazer:** `#DB2777`
+- **Outros:** `#64748B`
+
+Category colors should be paired with low-opacity alpha tints (e.g., 10%–15% opacity fills) for badge backgrounds and ledger iconography.
+
+## Typography
+
+Typographic hierarchy relies on the geometric precision and open apertures of **Plus Jakarta Sans**.
+
+- **Financial Figures & Metrics:** Currency values and large tabular calculations must employ `font-variant-numeric: tabular-nums` to maintain vertical decimal alignment across dynamic lists and transaction statements.
+- **Micro-copy & Uppercase Labels:** Sub-labels, category tags, and system indicators under 12px should apply subtle letter tracking (up to `+0.02em`) to ensure legibility against slate backgrounds.
+- **Emphasis Rules:** Weight is used functionally rather than decoratively: 700 and 800 for primary financial status and total balances; 600 for interactive triggers, table headers, and category tags; 400 for descriptions and transaction history.
+
+## Layout & Spacing
+
+The layout model is built upon a 12-column responsive grid on desktop and tablet, collapsing to a single fluid column on mobile.
+
+- **Desktop (1024px+):** Fixed maximum container width of `1280px` centered within the viewport. Employs a 12-column grid with `1.5rem` (`24px`) gutters and `2.5rem` (`40px`) margins. Sidebar navigation is fixed at `260px` or collapsed to an `80px` rail.
+- **Tablet (768px - 1023px):** Fluid 8-column layout with `1rem` (`16px`) gutters and `1.5rem` (`24px`) margins. Dashboard modules reflow into 2-column stacked pairings.
+- **Mobile (<768px):** Single-column stack with `1rem` (`16px`) horizontal canvas padding. Cards, tables, and lists scale to 100% width.
+- **Rhythm:** Spacing follows a strict 4px base unit. Internal component padding favors compact arrangements (`space-sm` for list items, `space-md` for standard cards, `space-lg` for modal boundaries and KPI card groups).
+
+## Elevation & Depth
+
+Visual hierarchy leverages crisp surface layering combined with low-contrast borders and feather-light, ambient shadows.
+
+- **Flat Layering:** Surfaces stack from `#F8FAFC` (Canvas ground) to `#FFFFFF` (Card/Primary module) to `#F1F5F9` (Embedded container, input surface, or pill background).
+- **Outlines:** All elevated containers must carry a crisp border of `1px solid #E2E8F0` to enforce architectural precision.
+- **Shadow System:**
+  - *Level 0 (Flat):* Zero shadow, perimeter defined purely by `#E2E8F0` border. Used for embedded tables, list rows, and sub-panels.
+  - *Level 1 (Card):* `0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 1px 2px -1px rgba(15, 23, 42, 0.04)`. Used for base cards, balance widgets, and transaction segments.
+  - *Level 2 (Hover & Popover):* `0 4px 6px -1px rgba(15, 23, 42, 0.06), 0 2px 4px -2px rgba(15, 23, 42, 0.04)`. Applied to interactive cards on hover, popovers, dropdown lists, and floating toolbar items.
+  - *Level 3 (Modal / Flyout):* `0 20px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04)`. Applied to transaction modals, slide-out expense details, and bottom sheets on mobile.
+
+## Shapes
+
+The design system standardizes on a calibrated **8px (`0.5rem`) base corner radius** across buttons, input fields, standard cards, and alert banners.
+
+- **Base Radius (`0.5rem` / 8px):** Buttons, form inputs, transaction row highlights, default cards, and standard visual badges.
+- **Large Radius (`rounded-lg` / `1rem` / 16px):** Outer application cards, dashboard analytics tiles, dialog modals, and segmented surface panels.
+- **Extra-Large Radius (`rounded-xl` / `1.5rem` / 24px):** Bottom sheets and major hero highlight banners.
+- **Pill Radius (`9999px`):** Status pills, expense category tags, search filters, and circular avatar indicators.
+
+## Components
+
+### Buttons
+- **Primary Button:** Background `#6D5EF5`, foreground `#FFFFFF`, border-radius `0.5rem` (8px), height `40px` (desktop) or `48px` (mobile). Hover state shifts background to `#5B4DE3`. Focus ring uses a 2px offset with `rgba(109, 94, 245, 0.35)`.
+- **Secondary Button:** Background `#FFFFFF`, foreground `#0F172A`, border `1px solid #E2E8F0`. Hover uses `#F8FAFC` background with `#CBD5E1` border.
+- **Ghost / Tertiary Button:** Transparent background, foreground `#475569`. Hover triggers `#F1F5F9`.
+
+### Chips & Category Badges
+- **Category Chips:** Fixed pill shape (`9999px`) or `0.5rem` (8px) radius. Background consists of the respective category token at 12% opacity with foreground text in the 100% token color (e.g., *Alimentação*: background `rgba(234, 88, 12, 0.12)`, text `#EA580C`).
+- **Filter Chips:** Inactive: `#FFFFFF` fill with `#E2E8F0` border and `#475569` text. Active: `#6D5EF5` fill with `#FFFFFF` text.
+
+### Inputs & Form Controls
+- **Input Fields:** Height `40px`, background `#FFFFFF`, border `1px solid #E2E8F0`, radius `0.5rem` (8px). Text color `#0F172A`, placeholder `#94A3B8`. Focus state shifts border to `#6D5EF5` with a subtle box-shadow ring (`0 0 0 3px rgba(109, 94, 245, 0.15)`).
+- **Checkboxes & Radios:** `18px` by `18px`, border `1.5px solid #CBD5E1`, background `#FFFFFF`. Active state fills with `#6D5EF5` with a white checkmark or center pip.
+
+### Cards & Financial Modules
+- **Standard Card:** Background `#FFFFFF`, border `1px solid #E2E8F0`, radius `1rem` (16px), Level 1 elevation shadow. Inner padding of `1.25rem` or `1.5rem`.
+- **Metric / Balance Card:** Houses primary financial numbers with `numeric-stat` styling. Sub-labels use `label-md` in `#475569`. Includes trend pills with micro up/down arrows.
+
+### Transaction Lists
+- **Rows:** Minimum height `56px`, horizontal padding `0.75rem`, radius `0.5rem` (8px).
+- **Interactive State:** Hover displays `#F8FAFC` background transition (`150ms ease`).
+- **Structure:** Category icon container (`40px` rounded circle or 8px rounded square with category background tint) on the left, Merchant and Date stacked in center, and tabular monetary value right-aligned (negative values in `#0F172A`, positive incomes in `#16A34A`).
