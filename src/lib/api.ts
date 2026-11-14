@@ -1,4 +1,18 @@
-import type { HealthStatus } from '../types/finance';
+import type {
+  ApiExpense,
+  BudgetsResponse,
+  CreateCategoryPayload,
+  CreateExpensePayload,
+  DashboardResponse,
+  DbBudget,
+  DbCategory,
+  DeleteMyDataResponse,
+  HealthStatus,
+  MeResponse,
+  PaginatedExpensesResponse,
+  UpdateCategoryPayload,
+  UpdateExpensePayload,
+} from '../types/finance';
 import { getSupabaseAccessToken } from './supabase';
 
 /**
@@ -20,24 +34,15 @@ type UnauthorizedHandler = () => void;
 
 let onUnauthorizedHandler: UnauthorizedHandler | null = null;
 
-/**
- * Registra o callback global disparado quando qualquer chamada à API retorna 401.
- * Permite redirecionar o usuário para /login e limpar sessão expirada.
- */
 export function registerUnauthorizedHandler(handler: UnauthorizedHandler | null) {
   onUnauthorizedHandler = handler;
 }
 
 interface RequestOptions extends Omit<RequestInit, 'body'> {
   body?: unknown;
-  /** Permite omitir o token em rotas públicas como /api/health */
   skipAuth?: boolean;
 }
 
-/**
- * Wrapper tipado para requisições à API Hono em /api/*.
- * Injeta automaticamente o Bearer JWT do Supabase e normaliza erros em pt-BR.
- */
 export async function apiRequest<T>(
   path: string,
   options: RequestOptions = {}
@@ -124,10 +129,143 @@ function isApiErrorPayload(
   );
 }
 
+export interface ExpensesQueryInput {
+  month?: string;
+  from?: string;
+  to?: string;
+  category?: string;
+  q?: string;
+  min?: number;
+  max?: number;
+  cursor?: string;
+  limit?: number;
+}
+
+function buildExpensesQueryString(input: ExpensesQueryInput): string {
+  const params = new URLSearchParams();
+  if (input.month && input.month !== 'all') params.set('month', input.month);
+  if (input.from) params.set('from', input.from);
+  if (input.to) params.set('to', input.to);
+  if (input.category && input.category !== 'all') {
+    params.set('category', input.category);
+  }
+  if (input.q && input.q.trim()) params.set('q', input.q.trim());
+  if (input.min !== undefined) params.set('min', String(input.min));
+  if (input.max !== undefined) params.set('max', String(input.max));
+  if (input.cursor) params.set('cursor', input.cursor);
+  if (input.limit !== undefined) params.set('limit', String(input.limit));
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
+}
+
 /**
  * Endpoints tipados do cliente Gastô.
- * Novas rotas de domínio serão adicionadas nas próximas etapas.
  */
 export const api = {
   health: () => apiRequest<HealthStatus>('/api/health', { skipAuth: true }),
+  me: () => apiRequest<MeResponse>('/api/me'),
+  deleteMyData: (confirmation: string) =>
+    apiRequest<DeleteMyDataResponse>('/api/me/data', {
+      method: 'DELETE',
+      body: { confirmation },
+    }),
+
+  dashboard: {
+    get: (month: string) =>
+      apiRequest<DashboardResponse>(
+        `/api/dashboard?month=${encodeURIComponent(month)}`
+      ),
+  },
+
+  expenses: {
+    list: (query: ExpensesQueryInput = {}) =>
+      apiRequest<PaginatedExpensesResponse>(
+        `/api/expenses${buildExpensesQueryString(query)}`
+      ),
+    create: (payload: CreateExpensePayload) =>
+      apiRequest<{ expense: ApiExpense }>('/api/expenses', {
+        method: 'POST',
+        body: payload,
+      }),
+    update: (id: string, payload: UpdateExpensePayload) =>
+      apiRequest<{ expense: ApiExpense }>(
+        `/api/expenses/${encodeURIComponent(id)}`,
+        {
+          method: 'PATCH',
+          body: payload,
+        }
+      ),
+    remove: (id: string) =>
+      apiRequest<{ ok: boolean; id: string }>(
+        `/api/expenses/${encodeURIComponent(id)}`,
+        {
+          method: 'DELETE',
+        }
+      ),
+    exportCsv: async (query: ExpensesQueryInput = {}): Promise<Blob> => {
+      const token = await getSupabaseAccessToken();
+      const headers = new Headers();
+      if (token) headers.set('Authorization', `Bearer ${token}`);
+
+      const res = await fetch(
+        `/api/expenses/export.csv${buildExpensesQueryString(query)}`,
+        { headers }
+      );
+
+      if (res.status === 401) {
+        onUnauthorizedHandler?.();
+        throw new ApiClientError(
+          401,
+          'UNAUTHORIZED',
+          'Sua sessão expirou. Faça login novamente.'
+        );
+      }
+
+      if (!res.ok) {
+        throw new ApiClientError(
+          res.status,
+          'EXPORT_ERROR',
+          'Não foi possível exportar o CSV agora.'
+        );
+      }
+
+      return res.blob();
+    },
+  },
+
+  categories: {
+    list: () => apiRequest<{ categories: DbCategory[] }>('/api/categories'),
+    create: (payload: CreateCategoryPayload) =>
+      apiRequest<{ category: DbCategory }>('/api/categories', {
+        method: 'POST',
+        body: payload,
+      }),
+    update: (id: string, payload: UpdateCategoryPayload) =>
+      apiRequest<{ category: DbCategory }>(
+        `/api/categories/${encodeURIComponent(id)}`,
+        {
+          method: 'PATCH',
+          body: payload,
+        }
+      ),
+    remove: (id: string) =>
+      apiRequest<{ ok: boolean; id: string }>(
+        `/api/categories/${encodeURIComponent(id)}`,
+        {
+          method: 'DELETE',
+        }
+      ),
+  },
+
+  budgets: {
+    list: () => apiRequest<BudgetsResponse>('/api/budgets'),
+    upsert: (categoryId: string | null, amountCents: number) =>
+      apiRequest<{ ok: boolean; removed: boolean; budget?: DbBudget }>(
+        '/api/budgets',
+        {
+          method: 'PUT',
+          body: { categoryId, amountCents },
+        }
+      ),
+  },
 };

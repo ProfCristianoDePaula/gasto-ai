@@ -16,7 +16,7 @@
 
   // Variáveis públicas de ambiente do Worker (segredos vão em .dev.vars ou `wrangler secret put`)
   "vars": {
-    "SUPABASE_URL": "https://seu-projeto.supabase.co",
+    "SUPABASE_URL": "https://laxtokfzlwkshrvzytxt.supabase.co",
     "APP_TIMEZONE": "America/Sao_Paulo"
   },
 

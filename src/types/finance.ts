@@ -1,3 +1,174 @@
+export type ThemeMode = 'dark' | 'light';
+
+export type ExpenseSource = 'image' | 'text' | 'voice' | 'manual';
+
+export interface HealthStatus {
+  ok: boolean;
+  service: string;
+  timezone: string;
+  imageStorage: 'r2' | 'thumbnail';
+  maxThumbnailBytes: number;
+  timestamp: string;
+}
+
+export interface DbCategory {
+  id: string;
+  user_id: string;
+  name: string;
+  icon: string;
+  color: string;
+  is_default: number;
+  created_at: string;
+}
+
+export interface DbBudget {
+  id: string;
+  user_id: string;
+  category_id: string | null;
+  amount_cents: number;
+  created_at: string;
+}
+
+export interface ApiExpense {
+  id: string;
+  user_id: string;
+  amount_cents: number;
+  expense_date: string;
+  merchant: string | null;
+  category_id: string | null;
+  notes: string | null;
+  source: ExpenseSource;
+  image_key: string | null;
+  thumbnail: string | null;
+  ai_confidence: number | null;
+  ai_raw: string | null;
+  content_hash: string | null;
+  created_at: string;
+  updated_at: string;
+  category_name: string | null;
+  category_icon: string | null;
+  category_color: string | null;
+}
+
+export interface PaginatedExpensesResponse {
+  items: ApiExpense[];
+  nextCursor: string | null;
+  totalCount: number;
+  totalCents: number;
+}
+
+export interface ExpensesFilterState {
+  month: string; // YYYY-MM ou 'all'
+  from: string; // YYYY-MM-DD ou ''
+  to: string; // YYYY-MM-DD ou ''
+  category: string; // categoryId ou 'all'
+  q: string;
+  minReais: string;
+  maxReais: string;
+}
+
+export interface CreateExpensePayload {
+  amountCents: number;
+  expenseDate: string;
+  merchant: string;
+  categoryId: string | null;
+  notes: string | null;
+  source?: ExpenseSource;
+}
+
+export interface UpdateExpensePayload {
+  amountCents?: number;
+  expenseDate?: string;
+  merchant?: string;
+  categoryId?: string | null;
+  notes?: string | null;
+}
+
+export interface CreateCategoryPayload {
+  name: string;
+  icon: string;
+  color: string;
+}
+
+export interface UpdateCategoryPayload {
+  name?: string;
+  icon?: string;
+  color?: string;
+}
+
+export interface BudgetsResponse {
+  totalBudgetCents: number | null;
+  budgets: DbBudget[];
+  categoryBudgets: DbBudget[];
+  categories: DbCategory[];
+}
+
+export interface DailySeriesPoint {
+  date: string; // YYYY-MM-DD
+  day: number;
+  totalCents: number;
+  expenseCount: number;
+}
+
+export interface DashboardCategoryItem {
+  categoryId: string | null;
+  name: string;
+  icon: string;
+  color: string;
+  isDefault: boolean;
+  spentCents: number;
+  expenseCount: number;
+  sharePct: number;
+  budgetCents: number;
+  remainingCents: number;
+  budgetUsagePct: number;
+  status: 'unset' | 'normal' | 'warning' | 'over';
+}
+
+export interface DashboardBudgetStatus {
+  totalLimitCents: number;
+  explicitTotalBudgetCents: number | null;
+  sumCategoryBudgetsCents: number;
+  spentCents: number;
+  remainingCents: number;
+  usagePct: number;
+  status: 'unset' | 'normal' | 'warning' | 'over';
+}
+
+export interface DashboardResponse {
+  month: string;
+  previousMonth: string;
+  totalCents: number;
+  expenseCount: number;
+  previousMonthTotalCents: number;
+  variationPct: number | null;
+  totalExpensesAllTime: number;
+  dailySeries: DailySeriesPoint[];
+  categories: DashboardCategoryItem[];
+  recentExpenses: ApiExpense[];
+  budgetStatus: DashboardBudgetStatus;
+}
+
+export interface MeResponse {
+  user: {
+    id: string;
+    email: string | null;
+  };
+  categories: DbCategory[];
+}
+
+export interface DeleteMyDataResponse {
+  ok: boolean;
+  deleted: {
+    expenses: number;
+    budgets: number;
+    merchantRules: number;
+    customCategories: number;
+    receiptImages: number;
+  };
+}
+
+// Mantidos para compatibilidade com utilitários puros e testes unitários existentes
 export type CategoryId =
   | 'alimentacao'
   | 'transporte'
@@ -13,8 +184,6 @@ export type PaymentMethod =
   | 'Pix'
   | 'Conta Corrente';
 
-export type ThemeMode = 'dark' | 'light';
-
 export interface CategoryMeta {
   id: CategoryId;
   label: string;
@@ -22,17 +191,12 @@ export interface CategoryMeta {
   colorLight: string;
 }
 
-/**
- * Lançamento financeiro. Todos os valores monetários são armazenados
- * em CENTAVOS (inteiro positivo) no banco e na API.
- */
 export interface Transaction {
   id: string;
   description: string;
   amountCents: number;
   type: TransactionType;
   category: CategoryId;
-  /** Data no formato ISO YYYY-MM-DD (exibida como dd/mm/aaaa na interface) */
   date: string;
   paymentMethod: PaymentMethod;
   notes?: string;
@@ -43,29 +207,11 @@ export interface CategoryBudget {
   limitCents: number;
 }
 
-export interface SavingsGoal {
-  id: string;
-  title: string;
-  targetCents: number;
-  currentCents: number;
-  deadline: string; // YYYY-MM
-  accent: 'primary' | 'secondary' | 'tertiary';
-}
-
 export interface TransactionFilters {
   search: string;
   category: CategoryId | 'all';
   type: 'all' | TransactionType;
-  monthKey: string; // YYYY-MM ou 'all'
-}
-
-export interface HealthStatus {
-  ok: boolean;
-  service: string;
-  timezone: string;
-  imageStorage: 'r2' | 'thumbnail';
-  maxThumbnailBytes: number;
-  timestamp: string;
+  monthKey: string;
 }
 
 export const CATEGORIES: Record<CategoryId, CategoryMeta> = {
@@ -107,11 +253,4 @@ export const CATEGORY_LIST: CategoryMeta[] = [
   CATEGORIES.educacao,
   CATEGORIES.lazer,
   CATEGORIES.outros,
-];
-
-export const PAYMENT_METHODS: PaymentMethod[] = [
-  'Nubank',
-  'Cartão Crédito',
-  'Pix',
-  'Conta Corrente',
 ];

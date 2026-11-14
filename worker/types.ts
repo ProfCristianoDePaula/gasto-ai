@@ -1,5 +1,5 @@
 /**
- * Tipagens de bindings e variáveis de ambiente do Cloudflare Worker.
+ * Tipagens de bindings, variáveis de contexto e payloads do Cloudflare Worker.
  */
 
 export interface Env {
@@ -17,6 +17,19 @@ export interface Env {
   SUPABASE_JWT_SECRET?: string;
   /** Fuso horário operacional da aplicação */
   APP_TIMEZONE?: string;
+}
+
+export interface AuthUser {
+  id: string;
+  email: string | null;
+}
+
+export interface HonoAppEnv {
+  Bindings: Env;
+  Variables: {
+    userId: string;
+    user: AuthUser;
+  };
 }
 
 export interface ApiErrorPayload {

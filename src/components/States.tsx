@@ -100,7 +100,7 @@ export function ErrorState({
           className="h-10 px-4 rounded-xl text-xs font-semibold bg-[#6d5ef5] text-white hover:bg-[#5b4de3] inline-flex items-center gap-2"
         >
           <RefreshCw size={14} />
-          Tentar novamente
+          Tentar de novo
         </button>
       )}
     </div>

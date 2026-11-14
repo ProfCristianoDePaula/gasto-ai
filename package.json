@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -n vite,worker -c cyan,magenta \"vite --port=3000 --host=0.0.0.0\" \"wrangler dev --local --ip 127.0.0.1 --port 8787\"",
-    "dev:remote": "concurrently -n vite,worker -c cyan,magenta \"vite --port=3000 --host=0.0.0.0\" \"wrangler dev --ip 127.0.0.1 --port 8787\"",
+    "dev": "node scripts/dev.mjs",
+    "dev:remote": "node scripts/dev.mjs --remote",
     "build": "vite build",
     "deploy": "npm run build && wrangler deploy",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.worker.json --noEmit",

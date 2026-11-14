@@ -1,67 +1,63 @@
 import { FormEvent, useState } from 'react';
-import { Check, Pencil, Plus, Target } from 'lucide-react';
-import {
-  CategoryBudget,
-  CategoryId,
-  SavingsGoal,
-  ThemeMode,
-  Transaction,
+import { Check, Pencil, Plus, Trash2 } from 'lucide-react';
+import type {
+  BudgetsResponse,
+  CreateCategoryPayload,
+  DashboardResponse,
+  DbCategory,
+  UpdateCategoryPayload,
 } from '../types/finance';
+import { formatCents, parseBrlInputToCents } from '../utils/finance';
 import {
-  computeCategoryBreakdown,
-  formatCents,
-  parseBrlInputToCents,
-} from '../utils/finance';
-import { CategoryIcon, getCategoryColor } from './CategoryIcon';
+  CUSTOM_CATEGORY_COLOR_OPTIONS,
+  CUSTOM_CATEGORY_ICON_OPTIONS,
+  DynamicCategoryIcon,
+} from './CategoryIcon';
 import { CurrencyText } from './CurrencyText';
-import { EmptyState, ErrorState, ListSkeleton } from './States';
+import { ErrorState, ListSkeleton } from './States';
 
 interface BudgetsViewProps {
-  transactions: Transaction[];
-  budgets: CategoryBudget[];
-  goals: SavingsGoal[];
-  monthKey: string;
-  theme: ThemeMode;
+  budgetsData?: BudgetsResponse;
+  dashboard?: DashboardResponse;
+  categories: DbCategory[];
   isLoading: boolean;
   errorMessage?: string | null;
   onRetry?: () => void;
-  onUpdateBudget: (category: CategoryId, newLimitCents: number) => void;
-  onContributeGoal: (goalId: string, amountCents: number) => void;
-  onCreateGoal: (
-    title: string,
-    targetCents: number,
-    deadline: string
-  ) => void;
+  onUpsertBudget: (categoryId: string | null, amountCents: number) => void;
+  onCreateCategory: (payload: CreateCategoryPayload) => Promise<void>;
+  onUpdateCategory: (id: string, payload: UpdateCategoryPayload) => Promise<void>;
+  onDeleteCategory: (id: string) => Promise<void>;
 }
 
 export function BudgetsView({
-  transactions,
-  budgets,
-  goals,
-  monthKey,
-  theme,
+  budgetsData,
+  dashboard,
+  categories,
   isLoading,
   errorMessage,
   onRetry,
-  onUpdateBudget,
-  onContributeGoal,
-  onCreateGoal,
+  onUpsertBudget,
+  onCreateCategory,
+  onUpdateCategory,
+  onDeleteCategory,
 }: BudgetsViewProps) {
-  const [editingCat, setEditingCat] = useState<CategoryId | null>(null);
+  const [editingTotal, setEditingTotal] = useState(false);
+  const [totalDraft, setTotalDraft] = useState('');
+  const [totalError, setTotalError] = useState<string | null>(null);
+
+  const [editingCatId, setEditingCatId] = useState<string | null>(null);
   const [limitDraft, setLimitDraft] = useState('');
   const [limitError, setLimitError] = useState<string | null>(null);
 
-  const [contributingGoalId, setContributingGoalId] = useState<string | null>(
-    null
-  );
-  const [contribDraft, setContribDraft] = useState('');
-  const [contribError, setContribError] = useState<string | null>(null);
+  const [showNewCategory, setShowNewCategory] = useState(false);
+  const [catName, setCatName] = useState('');
+  const [catIcon, setCatIcon] = useState('tag');
+  const [catColor, setCatColor] = useState(CUSTOM_CATEGORY_COLOR_OPTIONS[0]!);
+  const [catError, setCatError] = useState<string | null>(null);
+  const [catBusy, setCatBusy] = useState(false);
 
-  const [showNewGoal, setShowNewGoal] = useState(false);
-  const [goalTitle, setGoalTitle] = useState('');
-  const [goalTarget, setGoalTarget] = useState('');
-  const [goalDeadline, setGoalDeadline] = useState('2027-06');
-  const [goalError, setGoalError] = useState<string | null>(null);
+  const [renamingCatId, setRenamingCatId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
 
   if (isLoading) {
     return <ListSkeleton rows={4} />;
@@ -71,142 +67,289 @@ export function BudgetsView({
     return <ErrorState message={errorMessage} onRetry={onRetry} />;
   }
 
-  const breakdown = computeCategoryBreakdown(transactions, budgets, monthKey);
-  const totalBudgetCents = budgets.reduce((acc, b) => acc + b.limitCents, 0);
-  const totalSpentCents = breakdown.reduce((acc, b) => acc + b.spentCents, 0);
+  const budgetByCat = new Map<string, number>();
+  for (const b of budgetsData?.categoryBudgets ?? []) {
+    if (b.category_id) budgetByCat.set(b.category_id, Number(b.amount_cents));
+  }
+
+  const spentByCat = new Map<string, number>();
+  for (const item of dashboard?.categories ?? []) {
+    if (item.categoryId) spentByCat.set(item.categoryId, item.spentCents);
+  }
+
+  const explicitTotal = budgetsData?.totalBudgetCents ?? null;
+  const sumCategoriesBudget = Array.from(budgetByCat.values()).reduce(
+    (acc, v) => acc + v,
+    0
+  );
+  const effectiveTotalBudget =
+    explicitTotal !== null ? explicitTotal : sumCategoriesBudget;
+  const totalSpent = dashboard?.totalCents ?? 0;
   const totalPct =
-    totalBudgetCents > 0
-      ? Math.min(100, (totalSpentCents / totalBudgetCents) * 100)
+    effectiveTotalBudget > 0
+      ? Math.min(100, (totalSpent / effectiveTotalBudget) * 100)
       : 0;
 
-  const startEditBudget = (cat: CategoryId, currentLimitCents: number) => {
-    setEditingCat(cat);
+  const startEditTotal = () => {
+    setEditingTotal(true);
+    setTotalDraft(
+      explicitTotal !== null && explicitTotal > 0
+        ? (explicitTotal / 100).toFixed(2).replace('.', ',')
+        : ''
+    );
+    setTotalError(null);
+  };
+
+  const handleSaveTotalBudget = (e: FormEvent) => {
+    e.preventDefault();
+    const trimmed = totalDraft.trim();
+    if (trimmed === '' || trimmed === '0' || trimmed === '0,00') {
+      onUpsertBudget(null, 0);
+      setEditingTotal(false);
+      setTotalError(null);
+      return;
+    }
+    const parsed = parseBrlInputToCents(trimmed);
+    if (parsed === null) {
+      setTotalError('Informe um valor válido ou deixe vazio para remover o teto.');
+      return;
+    }
+    onUpsertBudget(null, parsed);
+    setEditingTotal(false);
+    setTotalError(null);
+  };
+
+  const startEditCatBudget = (catId: string, currentLimit: number) => {
+    setEditingCatId(catId);
     setLimitDraft(
-      currentLimitCents > 0
-        ? (currentLimitCents / 100).toFixed(2).replace('.', ',')
+      currentLimit > 0
+        ? (currentLimit / 100).toFixed(2).replace('.', ',')
         : ''
     );
     setLimitError(null);
   };
 
-  const handleSaveBudget = (e: FormEvent, cat: CategoryId) => {
+  const handleSaveCatBudget = (e: FormEvent, catId: string) => {
     e.preventDefault();
-    const parsedCents = parseBrlInputToCents(limitDraft);
-    if (parsedCents === null) {
-      setLimitError('Informe um limite válido maior que zero.');
+    const trimmed = limitDraft.trim();
+    if (trimmed === '' || trimmed === '0' || trimmed === '0,00') {
+      onUpsertBudget(catId, 0);
+      setEditingCatId(null);
+      setLimitError(null);
       return;
     }
-    onUpdateBudget(cat, parsedCents);
-    setEditingCat(null);
+    const parsed = parseBrlInputToCents(trimmed);
+    if (parsed === null) {
+      setLimitError('Informe um limite válido ou deixe vazio para remover.');
+      return;
+    }
+    onUpsertBudget(catId, parsed);
+    setEditingCatId(null);
     setLimitError(null);
   };
 
-  const handleSaveContribution = (e: FormEvent, goalId: string) => {
+  const handleCreateCategorySubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const parsedCents = parseBrlInputToCents(contribDraft);
-    if (parsedCents === null) {
-      setContribError('Informe um valor válido maior que zero.');
+    setCatError(null);
+    const trimmed = catName.trim();
+    if (trimmed.length < 2) {
+      setCatError('O nome da categoria deve ter pelo menos 2 caracteres.');
       return;
     }
-    onContributeGoal(goalId, parsedCents);
-    setContributingGoalId(null);
-    setContribDraft('');
-    setContribError(null);
+    setCatBusy(true);
+    try {
+      await onCreateCategory({ name: trimmed, icon: catIcon, color: catColor });
+      setCatName('');
+      setShowNewCategory(false);
+    } catch (err) {
+      setCatError(
+        err instanceof Error
+          ? err.message
+          : 'Não foi possível criar a categoria.'
+      );
+    } finally {
+      setCatBusy(false);
+    }
   };
 
-  const handleCreateGoalSubmit = (e: FormEvent) => {
+  const handleRenameSubmit = async (e: FormEvent, id: string) => {
     e.preventDefault();
-    const trimmed = goalTitle.trim();
-    if (trimmed.length < 2) {
-      setGoalError('Informe o nome da meta.');
-      return;
+    const trimmed = renameDraft.trim();
+    if (trimmed.length < 2) return;
+    setCatBusy(true);
+    try {
+      await onUpdateCategory(id, { name: trimmed });
+      setRenamingCatId(null);
+    } finally {
+      setCatBusy(false);
     }
-    const parsedTargetCents = parseBrlInputToCents(goalTarget);
-    if (parsedTargetCents === null) {
-      setGoalError('Informe um valor alvo válido maior que zero.');
-      return;
-    }
-    onCreateGoal(trimmed, parsedTargetCents, goalDeadline || '2027-12');
-    setShowNewGoal(false);
-    setGoalTitle('');
-    setGoalTarget('');
-    setGoalError(null);
   };
 
   return (
     <div className="space-y-8">
-      {/* Orçamentos por Categoria */}
-      <section aria-label="Orçamentos por categoria" className="space-y-4">
-        <div className="rounded-2xl bg-[#ffffff] dark:bg-[#131b2e] border border-[#E2E8F0] dark:border-white/8 p-6 shadow-xs dark:shadow-none">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+      {/* Orçamento Mensal Consolidado / Total */}
+      <section aria-label="Orçamento mensal" className="space-y-4">
+        <div className="rounded-2xl bg-[#ffffff] dark:bg-[#131b2e] border border-[#E2E8F0] dark:border-white/8 p-6 shadow-xs dark:shadow-none space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h2 className="text-base font-bold text-[#131b2e] dark:text-[#dae2fd]">
-                Teto Mensal Consolidado
+                {explicitTotal !== null
+                  ? 'Orçamento Mensal Total'
+                  : 'Teto Mensal Consolidado'}
               </h2>
               <p className="text-xs text-[#787586] dark:text-[#928ea1] mt-0.5">
-                Soma dos limites definidos para as 5 categorias
+                {explicitTotal !== null
+                  ? 'Limite geral definido para todas as despesas do mês'
+                  : 'Soma dos limites por categoria (ou defina um teto total)'}
               </p>
             </div>
-            <div className="text-left sm:text-right">
+
+            <div className="flex items-center gap-3">
               <p className="text-xl font-bold text-[#131b2e] dark:text-[#dae2fd]">
-                <CurrencyText amountCents={totalSpentCents} />
+                <CurrencyText amountCents={totalSpent} />
                 <span className="text-sm font-medium text-[#787586] dark:text-[#928ea1] ml-1.5">
-                  de <CurrencyText amountCents={totalBudgetCents} />
+                  de <CurrencyText amountCents={effectiveTotalBudget} />
                 </span>
               </p>
+              {!editingTotal && (
+                <button
+                  type="button"
+                  onClick={startEditTotal}
+                  className="h-9 px-3 rounded-xl text-xs font-semibold text-[#474555] dark:text-[#c8c4d7] bg-[#f2f3ff] dark:bg-[#222a3d] hover:bg-[#e2e7ff] dark:hover:bg-[#2d3449] inline-flex items-center gap-1.5 whitespace-nowrap"
+                >
+                  <Pencil size={13} />
+                  {explicitTotal !== null ? 'Editar total' : 'Definir teto'}
+                </button>
+              )}
             </div>
           </div>
 
+          {editingTotal && (
+            <form
+              onSubmit={handleSaveTotalBudget}
+              className="space-y-2 pt-2 border-t border-[#E2E8F0] dark:border-white/8"
+              noValidate
+            >
+              <label
+                htmlFor="budget-total-input"
+                className="block text-xs font-semibold text-[#474555] dark:text-[#c8c4d7]"
+              >
+                Orçamento mensal total em R$ (deixe vazio para usar soma das categorias)
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  id="budget-total-input"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="2500,00"
+                  value={totalDraft}
+                  onChange={(e) => {
+                    setTotalDraft(e.target.value);
+                    if (totalError) setTotalError(null);
+                  }}
+                  className="flex-1 min-w-[160px] h-10 px-3 rounded-xl bg-[#faf8ff] dark:bg-[#0b1326] border border-[#E2E8F0] dark:border-white/10 text-sm tabular-nums text-[#131b2e] dark:text-[#dae2fd] focus:outline-none focus:border-[#6d5ef5]"
+                />
+                <button
+                  type="submit"
+                  className="h-10 px-3.5 rounded-xl text-xs font-semibold bg-[#6d5ef5] text-white hover:bg-[#5b4de3] inline-flex items-center gap-1"
+                >
+                  <Check size={14} />
+                  Salvar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingTotal(false)}
+                  className="h-10 px-3 rounded-xl text-xs font-semibold bg-[#f2f3ff] dark:bg-[#222a3d] text-[#474555] dark:text-[#c8c4d7]"
+                >
+                  Cancelar
+                </button>
+              </div>
+              {totalError && (
+                <p
+                  role="alert"
+                  className="text-xs text-[#ba1a1a] dark:text-[#ffb4ab]"
+                >
+                  {totalError}
+                </p>
+              )}
+            </form>
+          )}
+
           <div className="h-2.5 w-full rounded-full bg-[#eaedff] dark:bg-[#0b1326] overflow-hidden">
             <div
-              className="h-full rounded-full bg-[#6d5ef5] transition-all duration-300"
-              style={{ width: `${totalPct}%` }}
+              className="h-full rounded-full transition-all duration-300"
+              style={{
+                width: `${totalPct}%`,
+                backgroundColor:
+                  effectiveTotalBudget > 0 && totalSpent > effectiveTotalBudget
+                    ? '#EF4444'
+                    : totalPct >= 80
+                      ? '#F59E0B'
+                      : '#6d5ef5',
+              }}
             />
           </div>
         </div>
 
+        {/* Limites por categoria */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {breakdown.map((item) => {
-            const color = getCategoryColor(item.meta.id, theme);
-            const isEditing = editingCat === item.meta.id;
-            const clampedPct = Math.min(100, item.budgetUsagePct);
+          {categories.map((cat) => {
+            const limitCents = budgetByCat.get(cat.id) ?? 0;
+            const spentCents = spentByCat.get(cat.id) ?? 0;
+            const remainingCents = limitCents - spentCents;
+            const usagePct =
+              limitCents > 0
+                ? Math.round((spentCents / limitCents) * 1000) / 10
+                : 0;
+            const clampedPct = Math.min(100, usagePct);
+
+            const status: 'unset' | 'normal' | 'warning' | 'over' =
+              limitCents === 0
+                ? 'unset'
+                : spentCents > limitCents
+                  ? 'over'
+                  : usagePct >= 80
+                    ? 'warning'
+                    : 'normal';
 
             const statusLabel =
-              item.limitCents === 0
+              status === 'unset'
                 ? 'Sem limite definido'
-                : item.status === 'over'
-                  ? `Acima do teto (${item.budgetUsagePct.toFixed(0)}%)`
-                  : item.status === 'warning'
-                    ? `Próximo do teto (${item.budgetUsagePct.toFixed(0)}%)`
-                    : `Dentro do limite (${item.budgetUsagePct.toFixed(0)}%)`;
+                : status === 'over'
+                  ? `Acima do teto (${usagePct.toFixed(0)}%)`
+                  : status === 'warning'
+                    ? `Próximo do teto (${usagePct.toFixed(0)}%)`
+                    : `Dentro do limite (${usagePct.toFixed(0)}%)`;
 
             const statusTextClass =
-              item.limitCents === 0
+              status === 'unset'
                 ? 'text-[#787586] dark:text-[#928ea1]'
-                : item.status === 'over'
+                : status === 'over'
                   ? 'text-[#ba1a1a] dark:text-[#ffb4ab]'
-                  : item.status === 'warning'
+                  : status === 'warning'
                     ? 'text-[#D97706] dark:text-[#F59E0B]'
                     : 'text-[#16A34A] dark:text-[#4edea3]';
 
             const barColor =
-              item.status === 'over'
+              status === 'over'
                 ? '#EF4444'
-                : item.status === 'warning'
+                : status === 'warning'
                   ? '#F59E0B'
-                  : color;
+                  : cat.color;
+
+            const isEditing = editingCatId === cat.id;
 
             return (
               <div
-                key={item.meta.id}
+                key={cat.id}
                 className="rounded-2xl bg-[#ffffff] dark:bg-[#131b2e] border border-[#E2E8F0] dark:border-white/8 p-5 shadow-xs dark:shadow-none flex flex-col justify-between gap-4"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <CategoryIcon category={item.meta.id} theme={theme} />
+                    <DynamicCategoryIcon icon={cat.icon} color={cat.color} />
                     <div>
                       <h3 className="text-sm font-bold text-[#131b2e] dark:text-[#dae2fd]">
-                        {item.meta.label}
+                        {cat.name}
                       </h3>
                       <p className={`text-xs font-semibold mt-0.5 ${statusTextClass}`}>
                         {statusLabel}
@@ -217,10 +360,8 @@ export function BudgetsView({
                   {!isEditing && (
                     <button
                       type="button"
-                      onClick={() =>
-                        startEditBudget(item.meta.id, item.limitCents)
-                      }
-                      aria-label={`Editar limite de ${item.meta.label}`}
+                      onClick={() => startEditCatBudget(cat.id, limitCents)}
+                      aria-label={`Editar limite de ${cat.name}`}
                       className="h-9 px-3 rounded-xl text-xs font-semibold text-[#474555] dark:text-[#c8c4d7] bg-[#f2f3ff] dark:bg-[#222a3d] hover:bg-[#e2e7ff] dark:hover:bg-[#2d3449] inline-flex items-center gap-1.5 whitespace-nowrap"
                     >
                       <Pencil size={13} />
@@ -231,21 +372,22 @@ export function BudgetsView({
 
                 {isEditing ? (
                   <form
-                    onSubmit={(e) => handleSaveBudget(e, item.meta.id)}
+                    onSubmit={(e) => handleSaveCatBudget(e, cat.id)}
                     className="space-y-2"
                     noValidate
                   >
                     <label
-                      htmlFor={`budget-${item.meta.id}`}
+                      htmlFor={`budget-${cat.id}`}
                       className="block text-xs font-semibold text-[#474555] dark:text-[#c8c4d7]"
                     >
-                      Novo teto mensal (R$)
+                      Teto mensal (R$) — deixe vazio para remover
                     </label>
                     <div className="flex items-center gap-2">
                       <input
-                        id={`budget-${item.meta.id}`}
+                        id={`budget-${cat.id}`}
                         type="text"
                         inputMode="decimal"
+                        placeholder="500,00"
                         value={limitDraft}
                         onChange={(e) => {
                           setLimitDraft(e.target.value);
@@ -262,7 +404,7 @@ export function BudgetsView({
                       </button>
                       <button
                         type="button"
-                        onClick={() => setEditingCat(null)}
+                        onClick={() => setEditingCatId(null)}
                         className="h-10 px-3 rounded-xl text-xs font-semibold bg-[#f2f3ff] dark:bg-[#222a3d] text-[#474555] dark:text-[#c8c4d7] whitespace-nowrap"
                       >
                         Cancelar
@@ -281,14 +423,14 @@ export function BudgetsView({
                   <div>
                     <div className="flex items-baseline justify-between text-xs mb-2 tabular-nums">
                       <span className="font-semibold text-[#131b2e] dark:text-[#dae2fd]">
-                        Gasto: <CurrencyText amountCents={item.spentCents} />
+                        Gasto: <CurrencyText amountCents={spentCents} />
                       </span>
                       <span className="text-[#787586] dark:text-[#928ea1]">
-                        {item.limitCents === 0
+                        {limitCents === 0
                           ? 'Defina um limite mensal'
-                          : item.remainingCents >= 0
-                            ? `Restam ${formatCents(item.remainingCents)}`
-                            : `Excedido em ${formatCents(Math.abs(item.remainingCents))}`}
+                          : remainingCents >= 0
+                            ? `Restam ${formatCents(remainingCents)}`
+                            : `Excedido em ${formatCents(Math.abs(remainingCents))}`}
                       </span>
                     </div>
                     <div className="h-2 w-full rounded-full bg-[#eaedff] dark:bg-[#0b1326] overflow-hidden">
@@ -308,258 +450,214 @@ export function BudgetsView({
         </div>
       </section>
 
-      {/* Metas de Economia */}
-      <section aria-label="Metas financeiras" className="space-y-4">
+      {/* Gerenciar Categorias (CRUD real /api/categories) */}
+      <section aria-label="Gerenciar categorias" className="space-y-4">
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-lg font-bold text-[#131b2e] dark:text-[#dae2fd]">
-              Metas de Economia
+              Categorias Personalizadas
             </h2>
             <p className="text-xs text-[#787586] dark:text-[#928ea1] mt-0.5">
-              Acompanhe reservas e faça novos aportes
+              Crie, renomeie ou remova categorias além das 5 padrão
             </p>
           </div>
 
           <button
             type="button"
             onClick={() => {
-              setShowNewGoal((v) => !v);
-              setGoalError(null);
+              setShowNewCategory((v) => !v);
+              setCatError(null);
             }}
             className="h-10 px-4 rounded-xl text-xs font-semibold bg-[#f2f3ff] dark:bg-[#222a3d] text-[#5442db] dark:text-[#c5c0ff] hover:bg-[#e2e7ff] dark:hover:bg-[#2d3449] inline-flex items-center gap-1.5 whitespace-nowrap"
           >
             <Plus size={15} />
-            Nova Meta
+            Nova Categoria
           </button>
         </div>
 
-        {showNewGoal && (
+        {showNewCategory && (
           <form
-            onSubmit={handleCreateGoalSubmit}
+            onSubmit={handleCreateCategorySubmit}
             noValidate
             className="rounded-2xl bg-[#ffffff] dark:bg-[#131b2e] border border-[#6d5ef5]/40 p-5 shadow-xs dark:shadow-none space-y-4"
           >
             <h3 className="text-sm font-bold text-[#131b2e] dark:text-[#dae2fd]">
-              Criar nova meta financeira
+              Criar nova categoria
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label
-                  htmlFor="new-goal-title"
+                  htmlFor="new-cat-name"
                   className="block text-xs font-semibold text-[#474555] dark:text-[#c8c4d7] mb-1"
                 >
-                  Objetivo
+                  Nome
                 </label>
                 <input
-                  id="new-goal-title"
+                  id="new-cat-name"
                   type="text"
-                  placeholder="Ex: Reserva de emergência"
-                  value={goalTitle}
-                  onChange={(e) => setGoalTitle(e.target.value)}
+                  maxLength={40}
+                  placeholder="Ex: Saúde, Assinaturas, Pets"
+                  value={catName}
+                  onChange={(e) => setCatName(e.target.value)}
                   className="w-full h-10 px-3 rounded-xl bg-[#faf8ff] dark:bg-[#0b1326] border border-[#E2E8F0] dark:border-white/10 text-sm text-[#131b2e] dark:text-[#dae2fd] focus:outline-none focus:border-[#6d5ef5]"
                 />
               </div>
               <div>
                 <label
-                  htmlFor="new-goal-target"
+                  htmlFor="new-cat-icon"
                   className="block text-xs font-semibold text-[#474555] dark:text-[#c8c4d7] mb-1"
                 >
-                  Valor alvo (R$)
+                  Ícone
                 </label>
-                <input
-                  id="new-goal-target"
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="10000,00"
-                  value={goalTarget}
-                  onChange={(e) => setGoalTarget(e.target.value)}
-                  className="w-full h-10 px-3 rounded-xl bg-[#faf8ff] dark:bg-[#0b1326] border border-[#E2E8F0] dark:border-white/10 text-sm tabular-nums text-[#131b2e] dark:text-[#dae2fd] focus:outline-none focus:border-[#6d5ef5]"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="new-goal-deadline"
-                  className="block text-xs font-semibold text-[#474555] dark:text-[#c8c4d7] mb-1"
-                >
-                  Prazo
-                </label>
-                <input
-                  id="new-goal-deadline"
-                  type="month"
-                  value={goalDeadline}
-                  onChange={(e) => setGoalDeadline(e.target.value)}
+                <select
+                  id="new-cat-icon"
+                  value={catIcon}
+                  onChange={(e) => setCatIcon(e.target.value)}
                   className="w-full h-10 px-3 rounded-xl bg-[#faf8ff] dark:bg-[#0b1326] border border-[#E2E8F0] dark:border-white/10 text-sm text-[#131b2e] dark:text-[#dae2fd] focus:outline-none focus:border-[#6d5ef5]"
-                />
+                >
+                  {CUSTOM_CATEGORY_ICON_OPTIONS.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
-            {goalError && (
+
+            <div>
+              <span className="block text-xs font-semibold text-[#474555] dark:text-[#c8c4d7] mb-1.5">
+                Cor
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {CUSTOM_CATEGORY_COLOR_OPTIONS.map((hex) => (
+                  <button
+                    key={hex}
+                    type="button"
+                    onClick={() => setCatColor(hex)}
+                    aria-label={`Selecionar cor ${hex}`}
+                    aria-pressed={catColor === hex}
+                    className={`w-8 h-8 rounded-full border-2 ${
+                      catColor === hex
+                        ? 'border-[#131b2e] dark:border-white scale-110'
+                        : 'border-transparent'
+                    }`}
+                    style={{ backgroundColor: hex }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {catError && (
               <p
                 role="alert"
                 className="text-xs text-[#ba1a1a] dark:text-[#ffb4ab]"
               >
-                {goalError}
+                {catError}
               </p>
             )}
+
             <div className="flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setShowNewGoal(false)}
+                onClick={() => setShowNewCategory(false)}
                 className="h-9 px-4 rounded-xl text-xs font-semibold bg-[#f2f3ff] dark:bg-[#222a3d] text-[#474555] dark:text-[#c8c4d7]"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="h-9 px-4 rounded-xl text-xs font-semibold bg-[#6d5ef5] text-white hover:bg-[#5b4de3]"
+                disabled={catBusy}
+                className="h-9 px-4 rounded-xl text-xs font-semibold bg-[#6d5ef5] text-white hover:bg-[#5b4de3] disabled:opacity-60"
               >
-                Criar meta
+                {catBusy ? 'Salvando...' : 'Criar categoria'}
               </button>
             </div>
           </form>
         )}
 
-        {goals.length === 0 ? (
-          <div className="rounded-2xl bg-[#ffffff] dark:bg-[#131b2e] border border-[#E2E8F0] dark:border-white/8 p-4">
-            <EmptyState
-              title="Nenhuma meta cadastrada"
-              description="Crie sua primeira meta financeira para acompanhar sua reserva de emergência ou objetivos."
-              action={
-                <button
-                  type="button"
-                  onClick={() => setShowNewGoal(true)}
-                  className="h-10 px-4 rounded-xl text-xs font-semibold bg-[#6d5ef5] text-white hover:bg-[#5b4de3]"
-                >
-                  + Nova Meta
-                </button>
-              }
-            />
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {goals.map((goal) => {
-              const pct =
-                goal.targetCents > 0
-                  ? Math.min(
-                      100,
-                      Math.round((goal.currentCents / goal.targetCents) * 100)
-                    )
-                  : 0;
-              const isContributing = contributingGoalId === goal.id;
-              const accentHex =
-                goal.accent === 'tertiary'
-                  ? theme === 'dark'
-                    ? '#4edea3'
-                    : '#10B981'
-                  : goal.accent === 'secondary'
-                    ? theme === 'dark'
-                      ? '#4cd7f6'
-                      : '#06B6D4'
-                    : '#6d5ef5';
-
-              return (
-                <div
-                  key={goal.id}
-                  className="rounded-2xl bg-[#ffffff] dark:bg-[#131b2e] border border-[#E2E8F0] dark:border-white/8 p-5 shadow-xs dark:shadow-none flex flex-col justify-between gap-4"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <span
-                        className="w-10 h-10 rounded-xl inline-flex items-center justify-center shrink-0"
-                        style={{
-                          backgroundColor: `${accentHex}1F`,
-                          color: accentHex,
-                        }}
-                        aria-hidden="true"
-                      >
-                        <Target size={18} />
-                      </span>
-                      <div>
-                        <h3 className="text-sm font-bold text-[#131b2e] dark:text-[#dae2fd]">
-                          {goal.title}
-                        </h3>
-                        <p className="text-xs text-[#787586] dark:text-[#928ea1] mt-0.5">
-                          Prazo {goal.deadline} · {pct}% concluído
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex items-baseline justify-between text-xs mb-2 tabular-nums">
-                      <span className="font-bold text-[#131b2e] dark:text-[#dae2fd]">
-                        <CurrencyText amountCents={goal.currentCents} />
-                      </span>
-                      <span className="text-[#787586] dark:text-[#928ea1]">
-                        Meta: <CurrencyText amountCents={goal.targetCents} />
-                      </span>
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-[#eaedff] dark:bg-[#0b1326] overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-300"
-                        style={{ width: `${pct}%`, backgroundColor: accentHex }}
-                      />
-                    </div>
-                  </div>
-
-                  {isContributing ? (
+        <div className="rounded-2xl bg-[#ffffff] dark:bg-[#131b2e] border border-[#E2E8F0] dark:border-white/8 divide-y divide-[#E2E8F0]/70 dark:divide-white/6">
+          {categories.map((cat) => {
+            const isRenaming = renamingCatId === cat.id;
+            return (
+              <div
+                key={cat.id}
+                className="px-5 py-3.5 flex items-center justify-between gap-3"
+              >
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <DynamicCategoryIcon
+                    icon={cat.icon}
+                    color={cat.color}
+                    size="sm"
+                  />
+                  {isRenaming ? (
                     <form
-                      onSubmit={(e) => handleSaveContribution(e, goal.id)}
-                      className="space-y-2"
-                      noValidate
+                      onSubmit={(e) => handleRenameSubmit(e, cat.id)}
+                      className="flex items-center gap-2 flex-1 max-w-sm"
                     >
-                      <label
-                        htmlFor={`contrib-${goal.id}`}
-                        className="sr-only"
+                      <input
+                        type="text"
+                        value={renameDraft}
+                        onChange={(e) => setRenameDraft(e.target.value)}
+                        className="flex-1 h-9 px-3 rounded-lg bg-[#faf8ff] dark:bg-[#0b1326] border border-[#E2E8F0] dark:border-white/10 text-xs text-[#131b2e] dark:text-[#dae2fd]"
+                      />
+                      <button
+                        type="submit"
+                        disabled={catBusy}
+                        className="h-9 px-3 rounded-lg bg-[#6d5ef5] text-white text-xs font-semibold"
                       >
-                        Valor do aporte para {goal.title}
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          id={`contrib-${goal.id}`}
-                          type="text"
-                          inputMode="decimal"
-                          placeholder="200,00"
-                          value={contribDraft}
-                          onChange={(e) => {
-                            setContribDraft(e.target.value);
-                            if (contribError) setContribError(null);
-                          }}
-                          className="flex-1 h-9 px-3 rounded-xl bg-[#faf8ff] dark:bg-[#0b1326] border border-[#E2E8F0] dark:border-white/10 text-sm tabular-nums text-[#131b2e] dark:text-[#dae2fd] focus:outline-none focus:border-[#6d5ef5]"
-                        />
-                        <button
-                          type="submit"
-                          className="h-9 px-3 rounded-xl text-xs font-semibold bg-[#6d5ef5] text-white hover:bg-[#5b4de3] whitespace-nowrap"
-                        >
-                          Aportar
-                        </button>
-                      </div>
-                      {contribError && (
-                        <p
-                          role="alert"
-                          className="text-xs text-[#ba1a1a] dark:text-[#ffb4ab]"
-                        >
-                          {contribError}
-                        </p>
-                      )}
+                        Salvar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRenamingCatId(null)}
+                        className="h-9 px-2.5 rounded-lg bg-[#f2f3ff] dark:bg-[#222a3d] text-xs font-semibold"
+                      >
+                        Cancelar
+                      </button>
                     </form>
                   ) : (
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-[#131b2e] dark:text-[#dae2fd] truncate">
+                        {cat.name}
+                      </p>
+                      <p className="text-[11px] text-[#787586] dark:text-[#928ea1]">
+                        {cat.is_default === 1
+                          ? 'Categoria padrão'
+                          : 'Categoria personalizada'}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {!isRenaming && (
+                  <div className="flex items-center gap-1.5 shrink-0">
                     <button
                       type="button"
                       onClick={() => {
-                        setContributingGoalId(goal.id);
-                        setContribDraft('');
-                        setContribError(null);
+                        setRenamingCatId(cat.id);
+                        setRenameDraft(cat.name);
                       }}
-                      className="w-full h-10 rounded-xl text-xs font-semibold bg-[#f2f3ff] dark:bg-[#222a3d] text-[#131b2e] dark:text-[#dae2fd] hover:bg-[#e2e7ff] dark:hover:bg-[#2d3449]"
+                      aria-label={`Renomear ${cat.name}`}
+                      className="w-9 h-9 rounded-xl inline-flex items-center justify-center text-[#787586] dark:text-[#928ea1] hover:text-[#5442db] dark:hover:text-[#c5c0ff] hover:bg-[#eaedff] dark:hover:bg-[#222a3d]"
                     >
-                      + Aportar na meta
+                      <Pencil size={15} />
                     </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+                    {cat.is_default === 0 && (
+                      <button
+                        type="button"
+                        onClick={() => onDeleteCategory(cat.id)}
+                        aria-label={`Excluir categoria ${cat.name}`}
+                        className="w-9 h-9 rounded-xl inline-flex items-center justify-center text-[#787586] dark:text-[#928ea1] hover:text-[#ba1a1a] dark:hover:text-[#ffb4ab] hover:bg-[#ffdad6]/40 dark:hover:bg-[#93000a]/30"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </section>
     </div>
   );
