@@ -10,14 +10,18 @@ import {
 import {
   computeSummary,
   filterTransactions,
-  formatShortDate,
+  formatDateBr,
 } from '../utils/finance';
 import { CategoryIcon, getCategoryColor } from './CategoryIcon';
 import { CurrencyText } from './CurrencyText';
+import { EmptyState, ErrorState, ListSkeleton } from './States';
 
 interface TransactionsViewProps {
   transactions: Transaction[];
   filters: TransactionFilters;
+  isLoading: boolean;
+  errorMessage?: string | null;
+  onRetry?: () => void;
   onFiltersChange: (next: TransactionFilters) => void;
   onEditTransaction: (tx: Transaction) => void;
   onDeleteTransaction: (id: string) => void;
@@ -28,12 +32,23 @@ interface TransactionsViewProps {
 export function TransactionsView({
   transactions,
   filters,
+  isLoading,
+  errorMessage,
+  onRetry,
   onFiltersChange,
   onEditTransaction,
   onDeleteTransaction,
   onOpenNewModal,
   theme,
 }: TransactionsViewProps) {
+  if (isLoading) {
+    return <ListSkeleton rows={5} />;
+  }
+
+  if (errorMessage) {
+    return <ErrorState message={errorMessage} onRetry={onRetry} />;
+  }
+
   const filtered = filterTransactions(transactions, filters);
   const summary = computeSummary(filtered, 'all');
 
@@ -53,13 +68,11 @@ export function TransactionsView({
 
   return (
     <div className="space-y-6">
-      {/* Filter Controls Card */}
       <section
         aria-label="Filtros de lançamentos"
         className="rounded-2xl bg-[#ffffff] dark:bg-[#131b2e] border border-[#E2E8F0] dark:border-white/8 p-5 shadow-xs dark:shadow-none space-y-4"
       >
         <div className="flex flex-col md:flex-row gap-3 md:items-center justify-between">
-          {/* Search Input */}
           <div className="relative flex-1 max-w-md">
             <Search
               size={16}
@@ -91,7 +104,6 @@ export function TransactionsView({
             )}
           </div>
 
-          {/* Type Segmented Control */}
           <div
             className="inline-flex p-1 rounded-xl bg-[#f2f3ff] dark:bg-[#0b1326] border border-[#E2E8F0] dark:border-white/8 self-start"
             role="group"
@@ -124,7 +136,6 @@ export function TransactionsView({
           </div>
         </div>
 
-        {/* Category Filter Buttons */}
         <div
           className="flex items-center gap-2 overflow-x-auto pb-1"
           role="group"
@@ -183,14 +194,15 @@ export function TransactionsView({
         </div>
       </section>
 
-      {/* Ledger List */}
       <section className="rounded-2xl bg-[#ffffff] dark:bg-[#131b2e] border border-[#E2E8F0] dark:border-white/8 p-5 sm:p-6 shadow-xs dark:shadow-none">
         <div className="flex flex-wrap items-center justify-between gap-3 pb-4 mb-2 border-b border-[#E2E8F0] dark:border-white/8">
           <p className="text-xs font-semibold text-[#474555] dark:text-[#928ea1]">
             <span className="tabular-nums text-[#131b2e] dark:text-[#dae2fd]">
               {filtered.length}
             </span>{' '}
-            {filtered.length === 1 ? 'lançamento encontrado' : 'lançamentos encontrados'}
+            {filtered.length === 1
+              ? 'lançamento encontrado'
+              : 'lançamentos encontrados'}
           </p>
 
           <div className="flex items-center gap-4 text-xs font-semibold tabular-nums">
@@ -198,46 +210,46 @@ export function TransactionsView({
               Saldo filtrado:{' '}
               <strong
                 className={
-                  summary.balance >= 0
+                  summary.balanceCents >= 0
                     ? 'text-[#16A34A] dark:text-[#4edea3]'
                     : 'text-[#ba1a1a] dark:text-[#ffb4ab]'
                 }
               >
-                <CurrencyText amount={summary.balance} signed />
+                <CurrencyText amountCents={summary.balanceCents} signed />
               </strong>
             </span>
           </div>
         </div>
 
         {filtered.length === 0 ? (
-          <div className="py-14 text-center space-y-3">
-            <p className="text-base font-semibold text-[#131b2e] dark:text-[#dae2fd]">
-              Nenhum lançamento encontrado
-            </p>
-            <p className="text-sm text-[#787586] dark:text-[#928ea1] max-w-sm mx-auto">
-              {hasActiveFilters
+          <EmptyState
+            title="Nenhum lançamento encontrado"
+            description={
+              hasActiveFilters
                 ? 'Tente ajustar os filtros ou a busca para visualizar outros registros.'
-                : 'Adicione sua primeira receita ou despesa neste período.'}
-            </p>
-            <div className="pt-2 flex items-center justify-center gap-3">
-              {hasActiveFilters && (
+                : 'Ainda não há lançamentos registrados para este período.'
+            }
+            action={
+              <div className="flex items-center justify-center gap-3">
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    onClick={handleClearFilters}
+                    className="h-10 px-4 rounded-xl text-sm font-semibold bg-[#f2f3ff] dark:bg-[#222a3d] text-[#131b2e] dark:text-[#dae2fd] hover:bg-[#e2e7ff] dark:hover:bg-[#2d3449]"
+                  >
+                    Limpar filtros
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={handleClearFilters}
-                  className="h-10 px-4 rounded-xl text-sm font-semibold bg-[#f2f3ff] dark:bg-[#222a3d] text-[#131b2e] dark:text-[#dae2fd] hover:bg-[#e2e7ff] dark:hover:bg-[#2d3449] transition-colors"
+                  onClick={onOpenNewModal}
+                  className="h-10 px-4 rounded-xl text-sm font-semibold bg-[#6d5ef5] text-white hover:bg-[#5b4de3]"
                 >
-                  Limpar filtros
+                  Novo Lançamento
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={onOpenNewModal}
-                className="h-10 px-4 rounded-xl text-sm font-semibold bg-[#6d5ef5] text-white hover:bg-[#5b4de3] transition-colors"
-              >
-                Novo Lançamento
-              </button>
-            </div>
-          </div>
+              </div>
+            }
+          />
         ) : (
           <ul className="divide-y divide-[#E2E8F0]/70 dark:divide-white/6">
             {filtered.map((tx) => {
@@ -256,7 +268,7 @@ export function TransactionsView({
                         {tx.description}
                       </p>
                       <p className="text-xs text-[#787586] dark:text-[#928ea1] truncate mt-0.5">
-                        <span>{formatShortDate(tx.date)}</span>
+                        <span>{formatDateBr(tx.date)}</span>
                         <span aria-hidden="true"> · </span>
                         <span>{tx.paymentMethod}</span>
                         <span aria-hidden="true"> · </span>
@@ -274,7 +286,7 @@ export function TransactionsView({
                       }`}
                     >
                       <CurrencyText
-                        amount={tx.amount}
+                        amountCents={tx.amountCents}
                         type={isIncome ? 'income' : 'expense'}
                       />
                     </span>
@@ -283,7 +295,7 @@ export function TransactionsView({
                       type="button"
                       onClick={() => onEditTransaction(tx)}
                       aria-label={`Editar ${tx.description}`}
-                      className="w-10 h-10 rounded-xl inline-flex items-center justify-center text-[#787586] dark:text-[#928ea1] hover:text-[#5442db] dark:hover:text-[#c5c0ff] hover:bg-[#eaedff] dark:hover:bg-[#222a3d] transition-colors"
+                      className="w-10 h-10 rounded-xl inline-flex items-center justify-center text-[#787586] dark:text-[#928ea1] hover:text-[#5442db] dark:hover:text-[#c5c0ff] hover:bg-[#eaedff] dark:hover:bg-[#222a3d]"
                     >
                       <Pencil size={16} />
                     </button>
@@ -292,7 +304,7 @@ export function TransactionsView({
                       type="button"
                       onClick={() => onDeleteTransaction(tx.id)}
                       aria-label={`Excluir ${tx.description}`}
-                      className="w-10 h-10 rounded-xl inline-flex items-center justify-center text-[#787586] dark:text-[#928ea1] hover:text-[#ba1a1a] dark:hover:text-[#ffb4ab] hover:bg-[#ffdad6]/40 dark:hover:bg-[#93000a]/30 transition-colors"
+                      className="w-10 h-10 rounded-xl inline-flex items-center justify-center text-[#787586] dark:text-[#928ea1] hover:text-[#ba1a1a] dark:hover:text-[#ffb4ab] hover:bg-[#ffdad6]/40 dark:hover:bg-[#93000a]/30"
                     >
                       <Trash2 size={16} />
                     </button>

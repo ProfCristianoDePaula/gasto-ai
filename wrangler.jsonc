@@ -1,0 +1,49 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "gasto",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Assets estáticos gerados pelo Vite em /dist.
+  // run_worker_first garante que /api/* passe sempre pelo Worker Hono antes do fallback SPA.
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+
+  // Variáveis públicas de ambiente do Worker (segredos vão em .dev.vars ou `wrangler secret put`)
+  "vars": {
+    "SUPABASE_URL": "https://seu-projeto.supabase.co",
+    "APP_TIMEZONE": "America/Sao_Paulo"
+  },
+
+  // Banco de dados Cloudflare D1
+  // 1. Rode: npx wrangler d1 create gasto-db
+  // 2. Cole o database_id retornado no campo "database_id" abaixo
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "gasto-db",
+      "database_id": "COLE_AQUI_O_DATABASE_ID_DO_D1",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // Bucket privado Cloudflare R2 para armazenar fotos de comprovantes.
+  // 1. Rode: npx wrangler r2 bucket create gasto-receipts
+  // Caso não queira ativar o R2, altere IMAGE_STORAGE para "thumbnail" em /worker/config.ts
+  "r2_buckets": [
+    {
+      "binding": "RECEIPTS",
+      "bucket_name": "gasto-receipts"
+    }
+  ],
+
+  // Cloudflare Workers AI (visão, texto e transcrição de áudio)
+  "ai": {
+    "binding": "AI"
+  }
+}

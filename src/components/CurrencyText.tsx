@@ -1,7 +1,8 @@
-import { formatBrlParts } from '../utils/finance';
+import { formatCentsParts } from '../utils/finance';
 
 interface CurrencyTextProps {
-  amount: number;
+  /** Valor em CENTAVOS (inteiro). */
+  amountCents: number;
   type?: 'income' | 'expense' | 'neutral';
   signed?: boolean;
   className?: string;
@@ -9,13 +10,16 @@ interface CurrencyTextProps {
 }
 
 export function CurrencyText({
-  amount,
+  amountCents,
   type = 'neutral',
   signed = false,
   className = '',
   symbolClassName = '',
 }: CurrencyTextProps) {
-  const { sign, symbol, value } = formatBrlParts(amount, { signed, type });
+  const { sign, symbol, value } = formatCentsParts(amountCents, {
+    signed,
+    type,
+  });
 
   return (
     <span className={`inline-flex items-baseline tabular-nums whitespace-nowrap ${className}`}>

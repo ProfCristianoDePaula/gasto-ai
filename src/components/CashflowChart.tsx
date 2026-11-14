@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ThemeMode } from '../types/finance';
-import { CashflowPoint, formatBrl } from '../utils/finance';
+import { CashflowPoint, formatCents } from '../utils/finance';
 
 interface CashflowChartProps {
   data: CashflowPoint[];
@@ -9,6 +9,23 @@ interface CashflowChartProps {
 
 export function CashflowChart({ data, theme }: CashflowChartProps) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+
+  const hasAnyValue = data.some(
+    (d) => d.incomeCents > 0 || d.expenseCents > 0
+  );
+
+  if (!hasAnyValue) {
+    return (
+      <div className="h-56 flex flex-col items-center justify-center text-center rounded-xl border border-dashed border-[#E2E8F0] dark:border-white/10 px-4">
+        <p className="text-sm font-semibold text-[#131b2e] dark:text-[#dae2fd]">
+          Sem movimentações no período
+        </p>
+        <p className="text-xs text-[#787586] dark:text-[#928ea1] mt-1 max-w-xs">
+          Assim que você registrar receitas ou despesas, o comparativo do fluxo de caixa aparecerá aqui.
+        </p>
+      </div>
+    );
+  }
 
   const width = 640;
   const height = 240;
@@ -20,9 +37,9 @@ export function CashflowChart({ data, theme }: CashflowChartProps) {
   const chartWidth = width - padLeft - padRight;
   const chartHeight = height - padTop - padBottom;
 
-  const maxBar = Math.max(
-    1000,
-    ...data.flatMap((d) => [d.income, d.expense])
+  const maxBarCents = Math.max(
+    10000,
+    ...data.flatMap((d) => [d.incomeCents, d.expenseCents])
   );
 
   const groupWidth = chartWidth / Math.max(1, data.length);
@@ -68,11 +85,11 @@ export function CashflowChart({ data, theme }: CashflowChartProps) {
               </strong>
               {' · '}
               <span className="text-[#16A34A] dark:text-[#4edea3]">
-                +{formatBrl(activePoint.income)}
+                +{formatCents(activePoint.incomeCents)}
               </span>
               {' · '}
               <span className="text-[#5442db] dark:text-[#c5c0ff]">
-                -{formatBrl(activePoint.expense)}
+                -{formatCents(activePoint.expenseCents)}
               </span>
             </span>
           ) : (
@@ -108,12 +125,12 @@ export function CashflowChart({ data, theme }: CashflowChartProps) {
           {data.map((point, idx) => {
             const centerX = padLeft + groupWidth * idx + groupWidth / 2;
             const incHeight = Math.max(
-              point.income > 0 ? 4 : 0,
-              (point.income / maxBar) * chartHeight
+              point.incomeCents > 0 ? 4 : 0,
+              (point.incomeCents / maxBarCents) * chartHeight
             );
             const expHeight = Math.max(
-              point.expense > 0 ? 4 : 0,
-              (point.expense / maxBar) * chartHeight
+              point.expenseCents > 0 ? 4 : 0,
+              (point.expenseCents / maxBarCents) * chartHeight
             );
             const baseY = padTop + chartHeight;
             const isHovered = activeIndex === idx;
@@ -127,7 +144,7 @@ export function CashflowChart({ data, theme }: CashflowChartProps) {
                 onFocus={() => setActiveIndex(idx)}
                 onBlur={() => setActiveIndex(null)}
                 tabIndex={0}
-                aria-label={`${point.label}: Receitas ${formatBrl(point.income)}, Despesas ${formatBrl(point.expense)}`}
+                aria-label={`${point.label}: Receitas ${formatCents(point.incomeCents)}, Despesas ${formatCents(point.expenseCents)}`}
               >
                 <rect
                   x={padLeft + groupWidth * idx + 4}
@@ -144,7 +161,6 @@ export function CashflowChart({ data, theme }: CashflowChartProps) {
                   }
                 />
 
-                {/* Income Bar */}
                 <rect
                   x={centerX - barWidth - barGap / 2}
                   y={baseY - incHeight}
@@ -156,7 +172,6 @@ export function CashflowChart({ data, theme }: CashflowChartProps) {
                   className="transition-opacity duration-150"
                 />
 
-                {/* Expense Bar */}
                 <rect
                   x={centerX + barGap / 2}
                   y={baseY - expHeight}

@@ -14,15 +14,21 @@ export interface BrlParts {
   value: string;
 }
 
-export function formatBrlParts(
-  amount: number,
+/**
+ * Formata um valor inteiro em CENTAVOS para partes óticas de exibição em BRL (R$ 1.234,56).
+ * A conversão de centavos para reais ocorre apenas na camada de interface.
+ */
+export function formatCentsParts(
+  cents: number,
   options?: { signed?: boolean; type?: 'income' | 'expense' | 'neutral' }
 ): BrlParts {
-  const abs = Math.abs(Number.isFinite(amount) ? amount : 0);
+  const safeCents = Number.isFinite(cents) ? Math.round(cents) : 0;
+  const absReais = Math.abs(safeCents) / 100;
+
   const formatted = new Intl.NumberFormat('pt-BR', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(abs);
+  }).format(absReais);
 
   let sign: '' | '+' | '-' = '';
   if (options?.type === 'income') {
@@ -30,9 +36,9 @@ export function formatBrlParts(
   } else if (options?.type === 'expense') {
     sign = '-';
   } else if (options?.signed) {
-    if (amount < 0) sign = '-';
-    else if (amount > 0) sign = '+';
-  } else if (amount < 0) {
+    if (safeCents < 0) sign = '-';
+    else if (safeCents > 0) sign = '+';
+  } else if (safeCents < 0) {
     sign = '-';
   }
 
@@ -43,23 +49,25 @@ export function formatBrlParts(
   };
 }
 
-export function formatBrl(
-  amount: number,
+export function formatCents(
+  cents: number,
   options?: { signed?: boolean; type?: 'income' | 'expense' | 'neutral' }
 ): string {
-  const { sign, symbol, value } = formatBrlParts(amount, options);
+  const { sign, symbol, value } = formatCentsParts(cents, options);
   return `${sign ? `${sign} ` : ''}${symbol} ${value}`;
 }
 
-export function parseBrlInput(raw: string): number | null {
+/**
+ * Converte texto digitado pelo usuário (ex: "1.234,56" ou "145,50") para CENTAVOS inteiros.
+ * Retorna null se vazio, zero, negativo ou inválido.
+ */
+export function parseBrlInputToCents(raw: string): number | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
 
-  // Strip currency prefix and whitespace
   const cleaned = trimmed.replace(/R\$/gi, '').replace(/\s+/g, '');
   if (!cleaned) return null;
 
-  // Reject negative sign or non-numeric garbage
   if (/[^0-9.,]/.test(cleaned)) return null;
 
   let normalized = cleaned;
@@ -67,34 +75,44 @@ export function parseBrlInput(raw: string): number | null {
   const hasDot = cleaned.includes('.');
 
   if (hasComma && hasDot) {
-    // Assume Brazilian format 1.234,56 if last separator is comma
     if (cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.')) {
       normalized = cleaned.replace(/\./g, '').replace(',', '.');
     } else {
-      // US format 1,234.56
       normalized = cleaned.replace(/,/g, '');
     }
   } else if (hasComma) {
     normalized = cleaned.replace(',', '.');
   } else if (hasDot) {
-    // Check if dot is thousands separator like 1.200
     const parts = cleaned.split('.');
-    if (parts.length > 1 && parts[parts.length - 1].length === 3 && parts.length >= 2) {
-      // Ambiguous; treat single dot with 2 decimals as decimal, 3 digits as thousands only if >1 dot
-      if (parts.length > 2) {
-        normalized = cleaned.replace(/\./g, '');
-      }
+    if (parts.length > 2) {
+      normalized = cleaned.replace(/\./g, '');
     }
   }
 
   const parsed = Number.parseFloat(normalized);
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
 
-  return Math.round(parsed * 100) / 100;
+  const cents = Math.round(parsed * 100);
+  return cents > 0 ? cents : null;
 }
 
 export function getMonthKey(dateStr: string): string {
   return dateStr.slice(0, 7);
+}
+
+/**
+ * Retorna a chave de mês atual (YYYY-MM) no fuso horário America/Sao_Paulo.
+ */
+export function getCurrentMonthKey(timeZone = 'America/Sao_Paulo'): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(new Date());
+
+  const year = parts.find((p) => p.type === 'year')?.value ?? '2026';
+  const month = parts.find((p) => p.type === 'month')?.value ?? '01';
+  return `${year}-${month}`;
 }
 
 export function formatMonthLabel(monthKey: string): string {
@@ -109,22 +127,19 @@ export function formatMonthLabel(monthKey: string): string {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-export function formatShortDate(dateStr: string): string {
-  const [year, month, day] = dateStr.split('-').map(Number);
+/**
+ * Formata data ISO YYYY-MM-DD para o padrão brasileiro dd/mm/aaaa.
+ */
+export function formatDateBr(dateStr: string): string {
+  const [year, month, day] = dateStr.split('-');
   if (!year || !month || !day) return dateStr;
-  const date = new Date(year, month - 1, day);
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: 'short',
-  })
-    .format(date)
-    .replace('.', '');
+  return `${day}/${month}/${year}`;
 }
 
 export interface FinancialSummary {
-  balance: number;
-  income: number;
-  expenses: number;
+  balanceCents: number;
+  incomeCents: number;
+  expensesCents: number;
   savingsRate: number;
   transactionCount: number;
 }
@@ -138,28 +153,27 @@ export function computeSummary(
       ? transactions.filter((t) => getMonthKey(t.date) === monthKey)
       : transactions;
 
-  let income = 0;
-  let expenses = 0;
+  let incomeCents = 0;
+  let expensesCents = 0;
 
   for (const tx of scoped) {
     if (tx.type === 'income') {
-      income += tx.amount;
+      incomeCents += tx.amountCents;
     } else {
-      expenses += tx.amount;
+      expensesCents += tx.amountCents;
     }
   }
 
-  const balance = Math.round((income - expenses) * 100) / 100;
-  income = Math.round(income * 100) / 100;
-  expenses = Math.round(expenses * 100) / 100;
-
+  const balanceCents = incomeCents - expensesCents;
   const savingsRate =
-    income > 0 ? Math.round(((income - expenses) / income) * 1000) / 10 : 0;
+    incomeCents > 0
+      ? Math.round(((incomeCents - expensesCents) / incomeCents) * 1000) / 10
+      : 0;
 
   return {
-    balance,
-    income,
-    expenses,
+    balanceCents,
+    incomeCents,
+    expensesCents,
     savingsRate,
     transactionCount: scoped.length,
   };
@@ -167,9 +181,9 @@ export function computeSummary(
 
 export interface CategoryBreakdownItem {
   meta: CategoryMeta;
-  spent: number;
-  limit: number;
-  remaining: number;
+  spentCents: number;
+  limitCents: number;
+  remainingCents: number;
   budgetUsagePct: number;
   expenseSharePct: number;
   status: 'normal' | 'warning' | 'over';
@@ -187,63 +201,68 @@ export function computeCategoryBreakdown(
       (!monthKey || monthKey === 'all' || getMonthKey(t.date) === monthKey)
   );
 
-  const totalExpenses = scopedExpenses.reduce((acc, t) => acc + t.amount, 0);
+  const totalExpensesCents = scopedExpenses.reduce(
+    (acc, t) => acc + t.amountCents,
+    0
+  );
 
   const budgetMap = new Map<CategoryId, number>();
   for (const b of budgets) {
-    budgetMap.set(b.category, b.limit);
+    budgetMap.set(b.category, b.limitCents);
   }
 
-  const spentMap = new Map<CategoryId, { spent: number; count: number }>();
+  const spentMap = new Map<CategoryId, { spentCents: number; count: number }>();
   for (const cat of CATEGORY_LIST) {
-    spentMap.set(cat.id, { spent: 0, count: 0 });
+    spentMap.set(cat.id, { spentCents: 0, count: 0 });
   }
 
   for (const tx of scopedExpenses) {
-    const entry = spentMap.get(tx.category) ?? { spent: 0, count: 0 };
-    entry.spent += tx.amount;
+    const entry = spentMap.get(tx.category) ?? { spentCents: 0, count: 0 };
+    entry.spentCents += tx.amountCents;
     entry.count += 1;
     spentMap.set(tx.category, entry);
   }
 
   return CATEGORY_LIST.map((meta) => {
-    const { spent, count } = spentMap.get(meta.id) ?? { spent: 0, count: 0 };
-    const roundedSpent = Math.round(spent * 100) / 100;
-    const limit = budgetMap.get(meta.id) ?? 0;
-    const remaining = Math.round((limit - roundedSpent) * 100) / 100;
+    const { spentCents, count } = spentMap.get(meta.id) ?? {
+      spentCents: 0,
+      count: 0,
+    };
+    const limitCents = budgetMap.get(meta.id) ?? 0;
+    const remainingCents = limitCents - spentCents;
     const budgetUsagePct =
-      limit > 0 ? Math.round((roundedSpent / limit) * 1000) / 10 : 0;
+      limitCents > 0 ? Math.round((spentCents / limitCents) * 1000) / 10 : 0;
     const expenseSharePct =
-      totalExpenses > 0
-        ? Math.round((roundedSpent / totalExpenses) * 1000) / 10
+      totalExpensesCents > 0
+        ? Math.round((spentCents / totalExpensesCents) * 1000) / 10
         : 0;
 
     let status: 'normal' | 'warning' | 'over' = 'normal';
-    if (limit > 0 && roundedSpent > limit) {
+    if (limitCents > 0 && spentCents > limitCents) {
       status = 'over';
-    } else if (limit > 0 && budgetUsagePct >= 80) {
+    } else if (limitCents > 0 && budgetUsagePct >= 80) {
       status = 'warning';
     }
 
     return {
       meta,
-      spent: roundedSpent,
-      limit,
-      remaining,
+      spentCents,
+      limitCents,
+      remainingCents,
       budgetUsagePct,
       expenseSharePct,
       status,
       count,
     };
-  }).sort((a, b) => b.spent - a.spent);
+  }).sort((a, b) => b.spentCents - a.spentCents);
 }
 
 export interface CashflowPoint {
   label: string;
   dateKey: string;
-  income: number;
-  expense: number;
-  cumulative: number;
+  incomeCents: number;
+  expenseCents: number;
+  cumulativeCents: number;
 }
 
 export function computeCashflowSeries(
@@ -255,60 +274,62 @@ export function computeCashflowSeries(
       ? transactions
       : transactions.filter((t) => getMonthKey(t.date) === monthKey);
 
-  // Group into 6 five-day buckets across the month (Dias 1-5, 6-10, ..., 26-31)
-  // or by date if 'all'
   if (monthKey === 'all') {
-    const monthTotals = new Map<string, { income: number; expense: number }>();
+    const monthTotals = new Map<
+      string,
+      { incomeCents: number; expenseCents: number }
+    >();
     for (const tx of scoped) {
       const m = getMonthKey(tx.date);
-      const curr = monthTotals.get(m) ?? { income: 0, expense: 0 };
-      if (tx.type === 'income') curr.income += tx.amount;
-      else curr.expense += tx.amount;
+      const curr = monthTotals.get(m) ?? { incomeCents: 0, expenseCents: 0 };
+      if (tx.type === 'income') curr.incomeCents += tx.amountCents;
+      else curr.expenseCents += tx.amountCents;
       monthTotals.set(m, curr);
     }
 
     const sortedKeys = Array.from(monthTotals.keys()).sort();
-    let running = 0;
+    let runningCents = 0;
     return sortedKeys.map((key) => {
-      const { income, expense } = monthTotals.get(key)!;
-      running += income - expense;
+      const { incomeCents, expenseCents } = monthTotals.get(key)!;
+      runningCents += incomeCents - expenseCents;
       const [y, m] = key.split('-');
       return {
         label: `${m}/${y.slice(2)}`,
         dateKey: key,
-        income: Math.round(income * 100) / 100,
-        expense: Math.round(expense * 100) / 100,
-        cumulative: Math.round(running * 100) / 100,
+        incomeCents,
+        expenseCents,
+        cumulativeCents: runningCents,
       };
     });
   }
 
   const buckets = [
-    { label: '01–05', min: 1, max: 5, income: 0, expense: 0 },
-    { label: '06–10', min: 6, max: 10, income: 0, expense: 0 },
-    { label: '11–15', min: 11, max: 15, income: 0, expense: 0 },
-    { label: '16–20', min: 16, max: 20, income: 0, expense: 0 },
-    { label: '21–25', min: 21, max: 25, income: 0, expense: 0 },
-    { label: '26–31', min: 26, max: 31, income: 0, expense: 0 },
+    { label: '01–05', min: 1, max: 5, incomeCents: 0, expenseCents: 0 },
+    { label: '06–10', min: 6, max: 10, incomeCents: 0, expenseCents: 0 },
+    { label: '11–15', min: 11, max: 15, incomeCents: 0, expenseCents: 0 },
+    { label: '16–20', min: 16, max: 20, incomeCents: 0, expenseCents: 0 },
+    { label: '21–25', min: 21, max: 25, incomeCents: 0, expenseCents: 0 },
+    { label: '26–31', min: 26, max: 31, incomeCents: 0, expenseCents: 0 },
   ];
 
   for (const tx of scoped) {
     const day = Number.parseInt(tx.date.slice(8, 10), 10) || 1;
     const bucket =
-      buckets.find((b) => day >= b.min && day <= b.max) ?? buckets[buckets.length - 1];
-    if (tx.type === 'income') bucket.income += tx.amount;
-    else bucket.expense += tx.amount;
+      buckets.find((b) => day >= b.min && day <= b.max) ??
+      buckets[buckets.length - 1];
+    if (tx.type === 'income') bucket.incomeCents += tx.amountCents;
+    else bucket.expenseCents += tx.amountCents;
   }
 
-  let running = 0;
+  let runningCents = 0;
   return buckets.map((b) => {
-    running += b.income - b.expense;
+    runningCents += b.incomeCents - b.expenseCents;
     return {
       label: b.label,
       dateKey: `${monthKey}-${b.label}`,
-      income: Math.round(b.income * 100) / 100,
-      expense: Math.round(b.expense * 100) / 100,
-      cumulative: Math.round(running * 100) / 100,
+      incomeCents: b.incomeCents,
+      expenseCents: b.expenseCents,
+      cumulativeCents: runningCents,
     };
   });
 }
@@ -324,18 +345,20 @@ export function computeFinancialInsight(
   transactions: Transaction[],
   budgets: CategoryBudget[],
   monthKey?: string
-): FinancialInsight {
+): FinancialInsight | null {
+  if (transactions.length === 0) return null;
+
   const summary = computeSummary(transactions, monthKey);
   const breakdown = computeCategoryBreakdown(transactions, budgets, monthKey);
 
   const overBudget = breakdown.find((b) => b.status === 'over');
   if (overBudget) {
-    const excess = Math.abs(overBudget.remaining);
+    const excessCents = Math.abs(overBudget.remainingCents);
     return {
       tone: 'alert',
       category: overBudget.meta.id,
       title: `${overBudget.meta.label} acima do orçamento`,
-      message: `Você ultrapassou o teto de ${overBudget.meta.label} em ${formatBrl(excess)}. Reduzir gastos nessa categoria ajuda a preservar sua meta mensal.`,
+      message: `Você ultrapassou o teto de ${overBudget.meta.label} em ${formatCents(excessCents)}.`,
     };
   }
 
@@ -345,20 +368,20 @@ export function computeFinancialInsight(
       tone: 'warning',
       category: nearLimit.meta.id,
       title: `Atenção ao limite de ${nearLimit.meta.label}`,
-      message: `${nearLimit.meta.label} atingiu ${nearLimit.budgetUsagePct.toFixed(0)}% do orçamento (${formatBrl(nearLimit.remaining)} disponíveis até o fim do mês).`,
+      message: `${nearLimit.meta.label} atingiu ${nearLimit.budgetUsagePct.toFixed(0)}% do orçamento (${formatCents(nearLimit.remainingCents)} disponíveis).`,
     };
   }
 
-  if (summary.income > 0 && summary.savingsRate >= 20) {
+  if (summary.incomeCents > 0 && summary.savingsRate >= 20) {
     return {
       tone: 'positive',
       title: 'Ritmo de economia saudável',
-      message: `Você está poupando ${summary.savingsRate.toFixed(1).replace('.', ',')}% das receitas no período (${formatBrl(summary.balance)} líquidos).`,
+      message: `Você está poupando ${summary.savingsRate.toFixed(1).replace('.', ',')}% das receitas no período (${formatCents(summary.balanceCents)} líquidos).`,
     };
   }
 
   const topCategory = breakdown[0];
-  if (topCategory && topCategory.spent > 0) {
+  if (topCategory && topCategory.spentCents > 0) {
     return {
       tone: 'positive',
       category: topCategory.meta.id,
@@ -367,11 +390,7 @@ export function computeFinancialInsight(
     };
   }
 
-  return {
-    tone: 'positive',
-    title: 'Pronto para começar',
-    message: 'Registre suas receitas e despesas para acompanhar o fluxo de caixa e os limites por categoria.',
-  };
+  return null;
 }
 
 export function filterTransactions(

@@ -19,20 +19,25 @@ import {
   computeCategoryBreakdown,
   computeFinancialInsight,
   computeSummary,
-  formatShortDate,
+  formatDateBr,
 } from '../utils/finance';
 import { CashflowChart } from './CashflowChart';
 import { CategoryIcon, getCategoryColor } from './CategoryIcon';
 import { CurrencyText } from './CurrencyText';
+import { DashboardSkeleton, EmptyState, ErrorState } from './States';
 
 interface OverviewViewProps {
   transactions: Transaction[];
   budgets: CategoryBudget[];
   monthKey: string;
   theme: ThemeMode;
+  isLoading: boolean;
+  errorMessage?: string | null;
+  onRetry?: () => void;
   onNavigateToTransactions: (category?: CategoryId) => void;
   onNavigateToBudgets: () => void;
   onEditTransaction: (tx: Transaction) => void;
+  onOpenNewModal: () => void;
 }
 
 export function OverviewView({
@@ -40,10 +45,22 @@ export function OverviewView({
   budgets,
   monthKey,
   theme,
+  isLoading,
+  errorMessage,
+  onRetry,
   onNavigateToTransactions,
   onNavigateToBudgets,
   onEditTransaction,
+  onOpenNewModal,
 }: OverviewViewProps) {
+  if (isLoading) {
+    return <DashboardSkeleton />;
+  }
+
+  if (errorMessage) {
+    return <ErrorState message={errorMessage} onRetry={onRetry} />;
+  }
+
   const summary = computeSummary(transactions, monthKey);
   const breakdown = computeCategoryBreakdown(transactions, budgets, monthKey);
   const cashflow = computeCashflowSeries(transactions, monthKey);
@@ -56,47 +73,48 @@ export function OverviewView({
 
   return (
     <div className="space-y-6">
-      {/* Smart Insight Banner (Sparkle Border Pill/Card) */}
-      <div
-        className="rounded-2xl p-[1px] bg-gradient-to-r from-[#6d5ef5]/65 via-[#06b6d4]/55 to-[#6d5ef5]/40"
-        aria-label="Análise financeira automática"
-      >
-        <div className="rounded-[15px] bg-[#ffffff] dark:bg-[#131b2e] px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-start sm:items-center gap-3">
-            <span className="w-8 h-8 rounded-lg bg-[#6d5ef5]/12 dark:bg-[#6d5ef5]/20 text-[#5442db] dark:text-[#c5c0ff] inline-flex items-center justify-center shrink-0">
-              {insight.tone === 'alert' ? (
-                <AlertTriangle size={16} />
-              ) : (
-                <Sparkles size={16} />
-              )}
-            </span>
-            <div>
-              <p className="text-sm font-semibold text-[#131b2e] dark:text-[#dae2fd]">
-                {insight.title}
-              </p>
-              <p className="text-xs text-[#474555] dark:text-[#c8c4d7] mt-0.5">
-                {insight.message}
-              </p>
+      {/* Banner de análise automática (exibido apenas quando há dados reais) */}
+      {insight && (
+        <div
+          className="rounded-2xl p-[1px] bg-gradient-to-r from-[#6d5ef5]/65 via-[#06b6d4]/55 to-[#6d5ef5]/40"
+          aria-label="Análise financeira automática"
+        >
+          <div className="rounded-[15px] bg-[#ffffff] dark:bg-[#131b2e] px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start sm:items-center gap-3">
+              <span className="w-8 h-8 rounded-lg bg-[#6d5ef5]/12 dark:bg-[#6d5ef5]/20 text-[#5442db] dark:text-[#c5c0ff] inline-flex items-center justify-center shrink-0">
+                {insight.tone === 'alert' ? (
+                  <AlertTriangle size={16} />
+                ) : (
+                  <Sparkles size={16} />
+                )}
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-[#131b2e] dark:text-[#dae2fd]">
+                  {insight.title}
+                </p>
+                <p className="text-xs text-[#474555] dark:text-[#c8c4d7] mt-0.5">
+                  {insight.message}
+                </p>
+              </div>
             </div>
+
+            <button
+              type="button"
+              onClick={onNavigateToBudgets}
+              className="self-start sm:self-center text-xs font-semibold text-[#5442db] dark:text-[#c5c0ff] hover:underline inline-flex items-center gap-1 whitespace-nowrap shrink-0"
+            >
+              Ver orçamentos
+              <ChevronRight size={14} />
+            </button>
           </div>
-
-          <button
-            type="button"
-            onClick={onNavigateToBudgets}
-            className="self-start sm:self-center text-xs font-semibold text-[#5442db] dark:text-[#c5c0ff] hover:underline inline-flex items-center gap-1 whitespace-nowrap shrink-0"
-          >
-            Ver orçamentos
-            <ChevronRight size={14} />
-          </button>
         </div>
-      </div>
+      )}
 
-      {/* 4-Column KPI Strip */}
+      {/* 4 KPIs do período */}
       <section
         aria-label="Resumo financeiro do período"
         className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"
       >
-        {/* Saldo Líquido */}
         <div className="rounded-2xl bg-[#ffffff] dark:bg-[#131b2e] border border-[#E2E8F0] dark:border-white/8 p-5 shadow-xs dark:shadow-none">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold text-[#474555] dark:text-[#928ea1]">
@@ -107,14 +125,15 @@ export function OverviewView({
             </span>
           </div>
           <p className="text-2xl sm:text-[28px] font-bold tracking-tight text-[#131b2e] dark:text-[#dae2fd]">
-            <CurrencyText amount={summary.balance} />
+            <CurrencyText amountCents={summary.balanceCents} />
           </p>
           <p className="text-xs text-[#787586] dark:text-[#928ea1] mt-2">
-            {summary.transactionCount} lançamentos registrados
+            {summary.transactionCount === 0
+              ? 'Nenhum lançamento no período'
+              : `${summary.transactionCount} lançamentos registrados`}
           </p>
         </div>
 
-        {/* Receitas */}
         <div className="rounded-2xl bg-[#ffffff] dark:bg-[#131b2e] border border-[#E2E8F0] dark:border-white/8 p-5 shadow-xs dark:shadow-none">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold text-[#474555] dark:text-[#928ea1]">
@@ -125,14 +144,13 @@ export function OverviewView({
             </span>
           </div>
           <p className="text-2xl sm:text-[28px] font-bold tracking-tight text-[#16A34A] dark:text-[#4edea3]">
-            <CurrencyText amount={summary.income} />
+            <CurrencyText amountCents={summary.incomeCents} />
           </p>
           <p className="text-xs text-[#787586] dark:text-[#928ea1] mt-2">
             Entradas confirmadas
           </p>
         </div>
 
-        {/* Despesas */}
         <div className="rounded-2xl bg-[#ffffff] dark:bg-[#131b2e] border border-[#E2E8F0] dark:border-white/8 p-5 shadow-xs dark:shadow-none">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold text-[#474555] dark:text-[#928ea1]">
@@ -143,14 +161,13 @@ export function OverviewView({
             </span>
           </div>
           <p className="text-2xl sm:text-[28px] font-bold tracking-tight text-[#131b2e] dark:text-[#dae2fd]">
-            <CurrencyText amount={summary.expenses} />
+            <CurrencyText amountCents={summary.expensesCents} />
           </p>
           <p className="text-xs text-[#787586] dark:text-[#928ea1] mt-2">
-            Total gasto nas 5 categorias
+            Total gasto no período
           </p>
         </div>
 
-        {/* Taxa de Economia */}
         <div className="rounded-2xl bg-[#ffffff] dark:bg-[#131b2e] border border-[#E2E8F0] dark:border-white/8 p-5 shadow-xs dark:shadow-none">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-semibold text-[#474555] dark:text-[#928ea1]">
@@ -164,14 +181,16 @@ export function OverviewView({
             {summary.savingsRate.toFixed(1).replace('.', ',')}%
           </p>
           <p className="text-xs text-[#787586] dark:text-[#928ea1] mt-2">
-            {summary.savingsRate >= 20
-              ? 'Acima da meta recomendada (20%)'
-              : 'Meta recomendada: 20% da renda'}
+            {summary.incomeCents === 0
+              ? 'Aguardando receitas no período'
+              : summary.savingsRate >= 20
+                ? 'Acima da meta recomendada (20%)'
+                : 'Meta recomendada: 20% da renda'}
           </p>
         </div>
       </section>
 
-      {/* Main Analytics Split: Cashflow Chart + Category Breakdown */}
+      {/* Fluxo de Caixa + Gastos por Categoria */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         <section className="lg:col-span-7 rounded-2xl bg-[#ffffff] dark:bg-[#131b2e] border border-[#E2E8F0] dark:border-white/8 p-6 shadow-xs dark:shadow-none flex flex-col justify-between">
           <div>
@@ -204,7 +223,7 @@ export function OverviewView({
               onClick={onNavigateToBudgets}
               className="text-xs font-semibold text-[#5442db] dark:text-[#c5c0ff] hover:underline whitespace-nowrap"
             >
-              Ajustar limites
+              Orçamentos
             </button>
           </div>
 
@@ -238,12 +257,12 @@ export function OverviewView({
 
                     <span className="text-xs tabular-nums text-[#474555] dark:text-[#c8c4d7]">
                       <strong className="font-semibold text-[#131b2e] dark:text-[#dae2fd]">
-                        <CurrencyText amount={item.spent} />
+                        <CurrencyText amountCents={item.spentCents} />
                       </strong>
-                      {item.limit > 0 && (
+                      {item.limitCents > 0 && (
                         <span className="text-[#787586] dark:text-[#928ea1]">
                           {' / '}
-                          <CurrencyText amount={item.limit} />
+                          <CurrencyText amountCents={item.limitCents} />
                         </span>
                       )}
                     </span>
@@ -265,7 +284,7 @@ export function OverviewView({
         </section>
       </div>
 
-      {/* Recent Transactions Feed */}
+      {/* Últimos Lançamentos */}
       <section className="rounded-2xl bg-[#ffffff] dark:bg-[#131b2e] border border-[#E2E8F0] dark:border-white/8 p-6 shadow-xs dark:shadow-none">
         <div className="flex items-center justify-between gap-4 mb-4">
           <div>
@@ -273,7 +292,7 @@ export function OverviewView({
               Últimos Lançamentos
             </h2>
             <p className="text-xs text-[#787586] dark:text-[#928ea1] mt-0.5">
-              Clique em um item para editar ou conferir detalhes
+              Histórico recente do período selecionado
             </p>
           </div>
           <button
@@ -287,11 +306,19 @@ export function OverviewView({
         </div>
 
         {recentTransactions.length === 0 ? (
-          <div className="py-10 text-center">
-            <p className="text-sm font-medium text-[#474555] dark:text-[#c8c4d7]">
-              Nenhum lançamento neste período ainda.
-            </p>
-          </div>
+          <EmptyState
+            title="Nenhum lançamento registrado ainda"
+            description="Seus gastos por foto, texto, voz ou entrada manual aparecerão aqui assim que a API de lançamentos for conectada."
+            action={
+              <button
+                type="button"
+                onClick={onOpenNewModal}
+                className="h-10 px-4 rounded-xl text-xs font-semibold bg-[#6d5ef5] text-white hover:bg-[#5b4de3]"
+              >
+                Novo Lançamento
+              </button>
+            }
+          />
         ) : (
           <ul className="divide-y divide-[#E2E8F0]/70 dark:divide-white/6">
             {recentTransactions.map((tx) => {
@@ -312,7 +339,7 @@ export function OverviewView({
                           {tx.description}
                         </p>
                         <p className="text-xs text-[#787586] dark:text-[#928ea1] truncate mt-0.5">
-                          <span>{formatShortDate(tx.date)}</span>
+                          <span>{formatDateBr(tx.date)}</span>
                           <span aria-hidden="true"> · </span>
                           <span>{tx.paymentMethod}</span>
                           <span aria-hidden="true"> · </span>
@@ -329,7 +356,7 @@ export function OverviewView({
                       }`}
                     >
                       <CurrencyText
-                        amount={tx.amount}
+                        amountCents={tx.amountCents}
                         type={isIncome ? 'income' : 'expense'}
                       />
                     </span>

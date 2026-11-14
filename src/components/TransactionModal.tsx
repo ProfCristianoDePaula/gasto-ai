@@ -9,7 +9,7 @@ import {
   Transaction,
   TransactionType,
 } from '../types/finance';
-import { parseBrlInput } from '../utils/finance';
+import { parseBrlInputToCents } from '../utils/finance';
 import { getCategoryColor } from './CategoryIcon';
 
 interface TransactionModalProps {
@@ -33,7 +33,7 @@ export function TransactionModal({
   const [amountInput, setAmountInput] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<CategoryId>('alimentacao');
-  const [date, setDate] = useState('2026-11-14');
+  const [date, setDate] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('Nubank');
   const [error, setError] = useState<string | null>(null);
 
@@ -43,7 +43,7 @@ export function TransactionModal({
     if (initialTransaction) {
       setType(initialTransaction.type);
       setAmountInput(
-        initialTransaction.amount.toFixed(2).replace('.', ',')
+        (initialTransaction.amountCents / 100).toFixed(2).replace('.', ',')
       );
       setDescription(initialTransaction.description);
       setCategory(initialTransaction.category);
@@ -54,8 +54,13 @@ export function TransactionModal({
       setAmountInput('');
       setDescription('');
       setCategory('alimentacao');
+      const todayIso = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+      }).format(new Date());
       const fallbackDate =
-        defaultMonthKey !== 'all' ? `${defaultMonthKey}-14` : '2026-11-14';
+        defaultMonthKey !== 'all' && !todayIso.startsWith(defaultMonthKey)
+          ? `${defaultMonthKey}-01`
+          : todayIso;
       setDate(fallbackDate);
       setPaymentMethod('Nubank');
     }
@@ -74,8 +79,8 @@ export function TransactionModal({
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    const parsedAmount = parseBrlInput(amountInput);
-    if (parsedAmount === null) {
+    const parsedCents = parseBrlInputToCents(amountInput);
+    if (parsedCents === null) {
       setError('Informe um valor válido maior que zero (ex: 145,50).');
       return;
     }
@@ -94,7 +99,7 @@ export function TransactionModal({
     onSave(
       {
         type,
-        amount: parsedAmount,
+        amountCents: parsedCents,
         description: trimmedDesc,
         category,
         date,
@@ -134,7 +139,6 @@ export function TransactionModal({
         </div>
 
         <form onSubmit={handleSubmit} noValidate className="p-6 space-y-5">
-          {/* Type Switcher */}
           <div
             className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-[#f2f3ff] dark:bg-[#0b1326] border border-[#E2E8F0] dark:border-white/8"
             role="group"
@@ -166,7 +170,6 @@ export function TransactionModal({
             </button>
           </div>
 
-          {/* Quick Hero Currency Input */}
           <div className="rounded-xl bg-[#faf8ff] dark:bg-[#0b1326] border border-[#E2E8F0] dark:border-white/8 px-4 py-5 text-center">
             <label
               htmlFor="tx-amount"
@@ -194,7 +197,6 @@ export function TransactionModal({
             </div>
           </div>
 
-          {/* Description */}
           <div>
             <label
               htmlFor="tx-description"
@@ -205,7 +207,7 @@ export function TransactionModal({
             <input
               id="tx-description"
               type="text"
-              placeholder="Ex: Supermercado, Uber, Salário..."
+              placeholder="Ex: Supermercado, Transporte, Salário..."
               value={description}
               onChange={(e) => {
                 setDescription(e.target.value);
@@ -215,7 +217,6 @@ export function TransactionModal({
             />
           </div>
 
-          {/* Category Selector */}
           <div>
             <span className="block text-xs font-semibold text-[#474555] dark:text-[#c8c4d7] mb-2">
               Categoria
@@ -256,7 +257,6 @@ export function TransactionModal({
             </div>
           </div>
 
-          {/* Date & Payment Method */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label

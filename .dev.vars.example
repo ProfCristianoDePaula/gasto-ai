@@ -1,0 +1,6 @@
+# Segredos locais do Cloudflare Worker (usados pelo wrangler dev).
+# Copie este arquivo para .dev.vars e NUNCA envie para o repositório.
+
+# Necessário apenas se o seu projeto Supabase assinar JWTs com HS256 (Legacy JWT Secret).
+# Projetos modernos com chaves assimétricas (JWKS) validam automaticamente via SUPABASE_URL.
+SUPABASE_JWT_SECRET=""

@@ -15,8 +15,6 @@ export type PaymentMethod =
 
 export type ThemeMode = 'dark' | 'light';
 
-export type AppView = 'overview' | 'transactions' | 'budgets';
-
 export interface CategoryMeta {
   id: CategoryId;
   label: string;
@@ -24,27 +22,32 @@ export interface CategoryMeta {
   colorLight: string;
 }
 
+/**
+ * Lançamento financeiro. Todos os valores monetários são armazenados
+ * em CENTAVOS (inteiro positivo) no banco e na API.
+ */
 export interface Transaction {
   id: string;
   description: string;
-  amount: number; // Always positive number; sign determined by type
+  amountCents: number;
   type: TransactionType;
   category: CategoryId;
-  date: string; // YYYY-MM-DD
+  /** Data no formato ISO YYYY-MM-DD (exibida como dd/mm/aaaa na interface) */
+  date: string;
   paymentMethod: PaymentMethod;
   notes?: string;
 }
 
 export interface CategoryBudget {
   category: CategoryId;
-  limit: number;
+  limitCents: number;
 }
 
 export interface SavingsGoal {
   id: string;
   title: string;
-  targetAmount: number;
-  currentAmount: number;
+  targetCents: number;
+  currentCents: number;
   deadline: string; // YYYY-MM
   accent: 'primary' | 'secondary' | 'tertiary';
 }
@@ -53,7 +56,16 @@ export interface TransactionFilters {
   search: string;
   category: CategoryId | 'all';
   type: 'all' | TransactionType;
-  monthKey: string; // YYYY-MM or 'all'
+  monthKey: string; // YYYY-MM ou 'all'
+}
+
+export interface HealthStatus {
+  ok: boolean;
+  service: string;
+  timezone: string;
+  imageStorage: 'r2' | 'thumbnail';
+  maxThumbnailBytes: number;
+  timestamp: string;
 }
 
 export const CATEGORIES: Record<CategoryId, CategoryMeta> = {
